@@ -1,0 +1,191 @@
+/* Aspire interaction consolidation.
+   Single home for the layout/behaviour rules the Transfer Band + rolodex
+   catalogue interaction needs across SYSTEM ARCHITECTURE, MISSION and
+   UPDATES. Loaded after styles.css, transfer-band-v3.css and
+   refinements-v4.css so it can be the deciding layer without needing to
+   touch those files' own (still-valid) rules. */
+
+/* Desktop proportion is explicitly 20 / 80 for all three explorers. */
+@media (min-width: 681px) {
+  #architectureWorkspace,
+  #missionWorkspace,
+  #mediaWorkspace {
+    display: grid !important;
+    grid-template-columns: 20% 80% !important;
+    gap: 0 !important;
+    padding: 0 !important;
+  }
+  #architectureWorkspace > .media-index-pane,
+  #missionWorkspace > .media-index-pane,
+  #mediaWorkspace > .media-index-pane {
+    flex: none !important;
+    width: auto !important;
+    min-width: 0 !important;
+  }
+  #architectureWorkspace > .media-stage,
+  #missionWorkspace > .media-stage,
+  #mediaWorkspace > .media-stage {
+    min-width: 0 !important;
+  }
+}
+
+/* The catalogue itself must be able to really scroll (scrollTop-driven, not
+   a translateY illusion) so any row — including the last one — can reach the
+   first-visible-row slot via a bottom padding reserve computed at click
+   time. Updates previously forced `overflow-y: visible`, which blocked
+   scrolling entirely. */
+#media-modal #mediaList,
+#mission-modal #missionList,
+#architectureWorkspace #oryxList {
+  overflow-y: auto !important;
+  overscroll-behavior: contain;
+  scroll-behavior: auto !important;
+}
+
+/* Update photographs and Architecture renders keep their current width but
+   use their intrinsic aspect ratio instead of being forced into the
+   shallow fixed-height viewport meant for the marquee/press imagery. */
+#mediaArticlePane .media-article-visual {
+  width: 100% !important;
+  height: auto !important;
+  min-height: 0 !important;
+  max-height: none !important;
+  overflow: visible !important;
+}
+#mediaArticlePane .media-article-visual #mediaHeroImage {
+  position: relative !important;
+  display: block !important;
+  width: 100% !important;
+  height: auto !important;
+  max-height: none !important;
+  object-fit: contain !important;
+}
+#mediaHeroAmbient {
+  display: none !important;
+}
+
+/* ---------- System Architecture spec composition ---------- */
+.architecture-spec-intro {
+  margin: 0 0 18px !important;
+  color: rgba(255, 255, 255, 0.82);
+  font-family: 'Montserrat', sans-serif !important;
+  font-size: 14px !important;
+  line-height: 1.5 !important;
+}
+
+.architecture-spec-sublabel {
+  display: inline-block;
+  margin-right: 10px;
+  padding-right: 10px;
+  border-right: 1px solid rgba(255, 255, 255, 0.28);
+  color: rgba(255, 255, 255, 0.6);
+  font-family: 'Martian Mono', monospace !important;
+  font-size: 10px !important;
+  font-weight: 700 !important;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+}
+
+#architectureWorkspace .architecture-spec-copy {
+  display: grid !important;
+  grid-template-columns: repeat(12, minmax(0, 1fr)) !important;
+  gap: 14px !important;
+  align-items: stretch !important;
+  padding-top: 4px !important;
+  max-width: none !important;
+}
+#architectureWorkspace .architecture-spec-lead,
+#architectureWorkspace .architecture-spec-kicker {
+  grid-column: 1 / -1 !important;
+  margin: 0 0 5px !important;
+  padding: 0 0 14px !important;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.22) !important;
+  font-family: 'Montserrat', sans-serif !important;
+  font-size: clamp(18px, 1.5vw, 23px) !important;
+  font-weight: 600 !important;
+  line-height: 1.22 !important;
+  letter-spacing: -0.01em !important;
+  color: #fff !important;
+}
+#architectureWorkspace .architecture-spec-intro {
+  grid-column: 1 / -1 !important;
+}
+#architectureWorkspace .architecture-spec-group {
+  grid-column: span 6 !important;
+  min-height: 120px !important;
+  padding: 17px 18px 16px !important;
+  margin: 0 !important;
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.055), rgba(255, 255, 255, 0.018)) !important;
+  border-top: 1px solid rgba(255, 255, 255, 0.42) !important;
+}
+#architectureWorkspace .architecture-spec-label {
+  margin-bottom: 14px !important;
+  color: rgba(255, 255, 255, 0.65) !important;
+  font-family: 'Martian Mono', monospace !important;
+  font-size: 10px !important;
+  font-weight: 700 !important;
+  letter-spacing: 0.16em !important;
+}
+#architectureWorkspace .architecture-spec-group p {
+  margin: 0 !important;
+  padding: 8px 0 !important;
+  border-top: 1px solid rgba(255, 255, 255, 0.1) !important;
+  font-family: 'Montserrat', sans-serif !important;
+  font-size: 14px !important;
+  font-weight: 500 !important;
+  line-height: 1.45 !important;
+  color: rgba(255, 255, 255, 0.88) !important;
+}
+#architectureWorkspace .architecture-spec-group p:first-of-type {
+  border-top: 0 !important;
+  padding-top: 0 !important;
+}
+#architectureWorkspace .architecture-spec-list {
+  grid-column: 1 / -1 !important;
+  display: grid !important;
+  grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+  gap: 8px 14px !important;
+  margin: 0 !important;
+  padding: 0 !important;
+  list-style: none !important;
+}
+#architectureWorkspace .architecture-spec-list li {
+  position: relative !important;
+  margin: 0 !important;
+  padding: 13px 15px 13px 28px !important;
+  border-top: 1px solid rgba(255, 255, 255, 0.22) !important;
+  background: rgba(255, 255, 255, 0.025) !important;
+  font-family: 'Montserrat', sans-serif !important;
+  font-size: 13.5px !important;
+  font-weight: 500 !important;
+  line-height: 1.45 !important;
+  color: rgba(255, 255, 255, 0.84) !important;
+}
+#architectureWorkspace .architecture-spec-list li::before {
+  content: '' !important;
+  position: absolute !important;
+  left: 14px !important;
+  top: 19px !important;
+  width: 5px !important;
+  height: 5px !important;
+  background: rgba(255, 255, 255, 0.75) !important;
+}
+#architectureWorkspace .architecture-spec-visual {
+  margin-bottom: 18px !important;
+}
+
+@media (max-width: 900px) {
+  #architectureWorkspace .architecture-spec-group,
+  #architectureWorkspace .architecture-spec-list {
+    grid-column: 1 / -1 !important;
+  }
+  #architectureWorkspace .architecture-spec-list {
+    grid-template-columns: 1fr !important;
+  }
+}
+
+/* Homepage SOCIAL section: hidden for this iteration, to be redesigned
+   later. Data/rendering left intact — only display is suppressed. */
+.social-feed-section {
+  display: none !important;
+}

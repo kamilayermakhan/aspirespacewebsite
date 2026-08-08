@@ -54,33 +54,28 @@
             return Math.min(hi, Math.max(lo, v));
         };
 
+        function px(value) {
+            const n = parseFloat(value);
+            return Number.isFinite(n) ? n : 0;
+        }
+
+        /* The rubricator label inside a row — its text is what travels. */
+        function sourceLabelFor(row) {
+            return row && (row.querySelector('.media-index-item-title, .media-index-item-outlet') || row);
+        }
+
         TransferCardController.prototype._ensureCard = function () {
             if (this.card) return this.card;
             const card = document.createElement('div');
-            card.className = 'transfer-card';
+            card.className = 'transfer-card transfer-band-v3';
             card.setAttribute('aria-hidden', 'true');
-            const source = document.createElement('span');
-            source.className = 'transfer-card-text transfer-card-text--source';
-            const target = document.createElement('span');
-            target.className = 'transfer-card-text transfer-card-text--target';
-            card.appendChild(source);
-            card.appendChild(target);
+            const label = document.createElement('span');
+            label.className = 'transfer-band-label';
+            card.appendChild(label);
             this.layer.appendChild(card);
             this.card = card;
-            this.cardSourceText = source;
-            this.cardTargetText = target;
+            this.bandLabel = label;
             return card;
-        };
-
-        TransferCardController.prototype._applyTypography = function (el, cs) {
-            el.style.fontFamily = cs.fontFamily;
-            el.style.fontWeight = cs.fontWeight;
-            el.style.fontSize = cs.fontSize;
-            el.style.letterSpacing = cs.letterSpacing;
-            el.style.lineHeight = cs.lineHeight;
-            el.style.textTransform = cs.textTransform;
-            el.style.color = cs.color;
-            el.style.justifyContent = cs.textAlign === 'center' ? 'center' : (cs.textAlign === 'right' ? 'flex-end' : 'flex-start');
         };
 
         TransferCardController.prototype._cancelActive = function () {
@@ -98,18 +93,71 @@
             }
         };
 
-        /* Snap the docked card back onto the rail with no animation — used after
+        /* Geometry for one card: where it starts (the clicked row) and where it
+           docks (a full-width band at the top of the frame, its label aligned to
+           the left edge of the article/spec text column). Measured fresh every
+           call — nothing here is hardcoded per item or per index. */
+        TransferCardController.prototype._measureBand = function (row) {
+            if (!this.frame || !row) return null;
+
+            const frameRect = this.frame.getBoundingClientRect();
+            const frameCS = getComputedStyle(this.frame);
+            const rowRect = row.getBoundingClientRect();
+            const labelNode = sourceLabelFor(row);
+            const labelRect = labelNode.getBoundingClientRect();
+            const topInset = px(frameCS.paddingTop);
+
+            const scroll = this.frame.querySelector('.media-article-scroll');
+            const body = this.frame.querySelector('.media-article-body');
+            let labelX;
+            if (scroll) {
+                const scrollRect = scroll.getBoundingClientRect();
+                const scrollCS = getComputedStyle(scroll);
+                const bodyCS = body ? getComputedStyle(body) : null;
+                labelX = scrollRect.left - frameRect.left + px(scrollCS.paddingLeft) + (bodyCS ? px(bodyCS.paddingLeft) : 0);
+            } else {
+                const stage = this.frame.querySelector('.media-stage');
+                const stageRect = stage ? stage.getBoundingClientRect() : frameRect;
+                labelX = stageRect.left - frameRect.left + 18;
+            }
+
+            return {
+                start: {
+                    x: rowRect.left - frameRect.left,
+                    y: rowRect.top - frameRect.top,
+                    width: rowRect.width,
+                    height: rowRect.height,
+                    labelX: labelRect.left - rowRect.left,
+                    labelY: labelRect.top - rowRect.top,
+                    labelWidth: labelRect.width,
+                    labelHeight: labelRect.height
+                },
+                dock: { x: 0, y: topInset, width: frameRect.width, labelX: labelX }
+            };
+        };
+
+        TransferCardController.prototype._reserveBandSpace = function (height) {
+            if (!this.frame) return;
+            this.frame.style.setProperty('--transfer-band-reserve', Math.ceil(height + 10) + 'px');
+            this.frame.classList.add('has-transfer-band');
+        };
+
+        /* Snap the docked card back onto the band with no animation — used after
            resize, where an in-flight or already-landed card's pixel geometry is
            stale relative to the (possibly reflowed) frame. */
         TransferCardController.prototype.resync = function () {
-            if (!this.card || this.dockedIndex === null || !this.frame || !this.rail) return;
+            if (!this.card || this.dockedIndex === null || !this.dockedRow || !this.frame) return;
             this._cancelActive();
-            const frameRect = this.frame.getBoundingClientRect();
-            const targetRect = this.rail.getBoundingClientRect();
-            this.card.style.left = (targetRect.left - frameRect.left) + 'px';
-            this.card.style.top = (targetRect.top - frameRect.top) + 'px';
-            this.card.style.width = targetRect.width + 'px';
-            this.card.style.height = targetRect.height + 'px';
+            const m = this._measureBand(this.dockedRow);
+            if (!m) return;
+            this.card.style.transform = '';
+            this.card.style.left = '0px';
+            this.card.style.top = m.dock.y + 'px';
+            this.card.style.width = m.dock.width + 'px';
+            this.card.style.height = m.start.height + 'px';
+            this.bandLabel.style.left = m.dock.labelX + 'px';
+            this.bandLabel.style.top = m.start.labelY + 'px';
+            this._reserveBandSpace(m.start.height);
         };
 
         /* Cancel any in-flight transfer, restore the idle state and hide the
@@ -120,84 +168,99 @@
             this.dockedIndex = null;
             this.dockedRow = null;
             if (this.card) this.card.style.display = 'none';
+            if (this.frame) {
+                this.frame.classList.remove('has-transfer-band');
+                this.frame.style.removeProperty('--transfer-band-reserve');
+            }
         };
 
         /*
-           row            — the clicked rubricator <button>
-           index          — its stable index (used only for de-duping repeats)
-           sourceText     — text as shown in the rubricator row
-           targetText     — text as it should read once docked (may differ, e.g.
-                             System Architecture's short nav label vs. its full
-                             detail title, or Updates' outlet badge vs. headline)
+           row            — the clicked rubricator <button>. Must already be the
+                             first visible row of its list (selectCatalogueItem
+                             below is responsible for scrolling it there first).
+           index          — its stable index (identity only, never used for
+                             geometry/timing)
+           text           — the rubricator title. It is also the docked heading:
+                             the label's typography is copied once from the
+                             source row and never changed, so nothing morphs —
+                             only its position/width animate.
            prepareContent — synchronous callback: unhides the article pane and
                              populates body content (image/text/etc). Runs before
-                             the destination rail is measured, so a pane that was
+                             the destination is measured, so a pane that was
                              `hidden` reports real geometry.
            immediate      — skip the animation and dock directly (initial load)
         */
-        TransferCardController.prototype.transferTo = function (row, index, sourceText, targetText, prepareContent, immediate) {
-            if (!this.frame || !this.rail || !row) return;
-
-            const frameRectBefore = this.frame.getBoundingClientRect();
-            const sourceRect = row.getBoundingClientRect();
-            const sourceCS = getComputedStyle(row);
+        TransferCardController.prototype.transferTo = function (row, index, text, prepareContent, immediate) {
+            if (!this.frame || !row) return;
 
             this._cancelActive();
-            const token = this.generation;
-
             this._restorePreviousLabel();
-            row.classList.add('media-index-item--transferring');
+
+            const sourceLabelNode = sourceLabelFor(row);
+            const sourceCS = getComputedStyle(sourceLabelNode);
+            const before = this._measureBand(row);
+            if (!before) return;
+
+            const token = this.generation;
             this.sourceLabel = row;
             this.dockedIndex = index;
             this.dockedRow = row;
 
             if (typeof prepareContent === 'function') prepareContent();
+            if (this.railLive) this.railLive.textContent = text;
 
-            if (this.railLive) this.railLive.textContent = targetText;
+            /* Content may have changed the stage geometry (image loaded, article
+               body height changed); recompute the destination while keeping the
+               exact source-row dimensions and typography captured above. */
+            const after = this._measureBand(row) || before;
+            const start = before.start;
+            const dock = after.dock;
+
+            row.classList.add('media-index-item--transferring');
 
             const card = this._ensureCard();
+            const label = this.bandLabel;
+            const self = this;
+
             card.style.display = '';
-
-            const frameRect = this.frame.getBoundingClientRect();
-            const targetRect = this.rail.getBoundingClientRect();
-            const targetCS = getComputedStyle(this.rail);
-
-            const start = {
-                x: sourceRect.left - frameRect.left,
-                y: sourceRect.top - frameRect.top,
-                width: sourceRect.width,
-                height: sourceRect.height
-            };
-            const dock = {
-                x: targetRect.left - frameRect.left,
-                y: targetRect.top - frameRect.top,
-                width: targetRect.width,
-                height: targetRect.height
-            };
-
+            card.style.transform = '';
             card.style.left = start.x + 'px';
             card.style.top = start.y + 'px';
             card.style.width = start.width + 'px';
             card.style.height = start.height + 'px';
 
-            this.cardSourceText.textContent = sourceText;
-            this._applyTypography(this.cardSourceText, sourceCS);
-            this.cardSourceText.style.opacity = '1';
+            label.textContent = text;
+            label.style.left = start.labelX + 'px';
+            label.style.top = start.labelY + 'px';
+            label.style.width = Math.max(start.labelWidth, 1) + 'px';
+            label.style.height = Math.max(start.labelHeight, 1) + 'px';
+            label.style.opacity = '1';
+            label.style.fontFamily = sourceCS.fontFamily;
+            label.style.fontWeight = sourceCS.fontWeight;
+            label.style.fontSize = sourceCS.fontSize;
+            label.style.letterSpacing = sourceCS.letterSpacing;
+            label.style.lineHeight = sourceCS.lineHeight;
+            label.style.textTransform = sourceCS.textTransform;
+            label.style.color = sourceCS.color;
+            label.style.textAlign = sourceCS.textAlign;
+            label.style.whiteSpace = sourceCS.whiteSpace;
+            label.style.textOverflow = sourceCS.textOverflow;
 
-            this.cardTargetText.textContent = targetText;
-            this._applyTypography(this.cardTargetText, targetCS);
-            this.cardTargetText.style.opacity = '0';
-
-            const self = this;
             const finish = function () {
                 if (token !== self.generation) return;
-                card.style.left = dock.x + 'px';
+                card.style.transform = '';
+                card.style.left = '0px';
                 card.style.top = dock.y + 'px';
                 card.style.width = dock.width + 'px';
-                card.style.height = dock.height + 'px';
-                self.cardSourceText.style.opacity = '0';
-                self.cardTargetText.style.opacity = '1';
+                card.style.height = start.height + 'px';
+                label.style.left = dock.labelX + 'px';
+                label.style.top = start.labelY + 'px';
+                label.style.width = Math.max(start.labelWidth, 1) + 'px';
+                label.style.height = Math.max(start.labelHeight, 1) + 'px';
+                label.style.opacity = '1';
+                self._reserveBandSpace(start.height);
                 self.animations = [];
+                self.timers = [];
             };
 
             if (immediate || TransferCardController.reducedMotion() || TransferCardController.stackedLayout()) {
@@ -227,32 +290,115 @@
                 card.style.transform = '';
                 try { vAnim.cancel(); } catch (err) {}
 
-                const hAnim = card.animate(
+                const bandAnim = card.animate(
                     [
-                        { left: start.x + 'px', width: start.width + 'px', height: start.height + 'px' },
-                        { left: dock.x + 'px', width: dock.width + 'px', height: dock.height + 'px' }
+                        { left: start.x + 'px', width: start.width + 'px' },
+                        { left: '0px', width: dock.width + 'px' }
                     ],
                     { duration: TransferCardController.H_DURATION, easing: TransferCardController.H_EASE, fill: 'forwards' }
                 );
-                const outAnim = self.cardSourceText.animate(
-                    [{ opacity: 1 }, { opacity: 1, offset: 0.35 }, { opacity: 0 }],
-                    { duration: TransferCardController.H_DURATION, easing: 'linear', fill: 'forwards' }
+                const labelAnim = label.animate(
+                    [{ left: start.labelX + 'px' }, { left: dock.labelX + 'px' }],
+                    { duration: TransferCardController.H_DURATION, easing: TransferCardController.H_EASE, fill: 'forwards' }
                 );
-                const inAnim = self.cardTargetText.animate(
-                    [{ opacity: 0 }, { opacity: 0, offset: 0.55 }, { opacity: 1 }],
-                    { duration: TransferCardController.H_DURATION, easing: 'linear', fill: 'forwards' }
-                );
-                self.animations = [hAnim, outAnim, inAnim];
+                self.animations = [bandAnim, labelAnim];
 
                 const phase2Timer = setTimeout(function () {
                     if (token !== self.generation) return;
-                    try { hAnim.cancel(); outAnim.cancel(); inAnim.cancel(); } catch (err) {}
+                    try { bandAnim.cancel(); labelAnim.cancel(); } catch (err) {}
                     finish();
                 }, TransferCardController.H_DURATION);
                 self.timers = [phase2Timer];
             }, vDuration);
             this.timers = [phase1Timer];
         };
+
+        /* ----------------------------------------------------------------------
+           selectCatalogueItem — the ONE lifecycle shared by Mission, Updates and
+           System Architecture:
+
+             1. cancel whatever this controller is currently doing;
+             2. restore the previously-selected row's label immediately (it is
+                structurally present the whole time — only its text was hidden);
+             3. scroll the catalogue (real scrollTop, item order never changes)
+                until the clicked row is the first visible row;
+             4. only then transfer that row's title into the band on the right.
+
+           A single controller.generation token guards both phases, so a second
+           click while a scroll or transfer is still in flight cancels it
+           cleanly — there is never more than one moving band and never more
+           than one blank source row.
+           ---------------------------------------------------------------------- */
+        function easeOutQuart(t) { return 1 - Math.pow(1 - t, 4); }
+
+        function scrollRowToTop(list, row, controller, token) {
+            return new Promise(function (resolve) {
+                if (!list || !row) { resolve(false); return; }
+
+                const rowRect = row.getBoundingClientRect();
+                const listRect = list.getBoundingClientRect();
+                const rowHeight = Math.max(1, rowRect.height);
+
+                // Give the catalogue enough trailing space for even the last row
+                // to reach the top slot without changing record order.
+                const reserve = Math.max(14, list.clientHeight - rowHeight + 14);
+                list.style.paddingBottom = reserve + 'px';
+                void list.offsetHeight;
+
+                const from = list.scrollTop;
+                const unclamped = from + (rowRect.top - listRect.top);
+                const maxScroll = Math.max(0, list.scrollHeight - list.clientHeight);
+                const target = Math.max(0, Math.min(maxScroll, unclamped));
+                const distance = target - from;
+
+                if (TransferCardController.reducedMotion() || Math.abs(distance) < 1) {
+                    list.scrollTop = target;
+                    resolve(token === controller.generation);
+                    return;
+                }
+
+                const duration = Math.max(150, Math.min(340, Math.abs(distance) * 0.42));
+                const start = performance.now();
+
+                const tick = function (now) {
+                    if (token !== controller.generation) { resolve(false); return; }
+                    const t = Math.min(1, (now - start) / duration);
+                    list.scrollTop = from + distance * easeOutQuart(t);
+                    if (t < 1) requestAnimationFrame(tick);
+                    else { list.scrollTop = target; resolve(true); }
+                };
+                requestAnimationFrame(tick);
+            });
+        }
+
+        function selectCatalogueItem(controller, list, row, index, text, prepareContent, immediate) {
+            if (!controller || !row) return;
+
+            controller._cancelActive();
+            controller._restorePreviousLabel();
+            if (controller.card) controller.card.style.display = 'none';
+            if (controller.frame) {
+                controller.frame.classList.remove('has-transfer-band');
+                controller.frame.style.removeProperty('--transfer-band-reserve');
+            }
+            controller.dockedIndex = null;
+            controller.dockedRow = null;
+
+            const token = controller.generation;
+            const proceed = function () {
+                if (token !== controller.generation) return;
+                controller.transferTo(row, index, text, prepareContent, immediate);
+            };
+
+            if (immediate || !list) {
+                proceed();
+                return;
+            }
+
+            scrollRowToTop(list, row, controller, token).then(function (ok) {
+                if (ok) proceed();
+            });
+        }
 
         const architectureTransfer = new TransferCardController({
             frame: '#architectureWorkspace',
@@ -504,8 +650,6 @@
             const text = document.getElementById('mediaText');
             const resetButton = document.getElementById('mediaResetButton');
 
-            let activeIndex = null;
-
             function setSelectedButton(index) {
                 list.querySelectorAll('button[data-media-index]').forEach(button => {
                     const selected = Number(button.dataset.mediaIndex) === index;
@@ -515,7 +659,6 @@
             }
 
             function resetMediaExplorer() {
-                activeIndex = null;
                 setSelectedButton(-1);
                 stage.classList.remove('has-article');
                 idle.classList.remove('hidden');
@@ -532,11 +675,15 @@
                 });
             }
 
+            function mediaGeo(item, index) {
+                if (item && item.outlet === '24KZ') return 'UAE';
+                return MEDIA_GEOTAGS[index] || '';
+            }
+
             function showMedia(index) {
                 const item = MEDIA_RELEASES[index];
                 if (!item) return;
 
-                activeIndex = index;
                 setSelectedButton(index);
 
                 stage.classList.add('has-article');
@@ -545,7 +692,6 @@
 
                 title.textContent = item.title;
                 if (chromeTitle) chromeTitle.textContent = item.title;
-
 
                 const imageUrl = item.imageData ||
                     `https://drive.google.com/thumbnail?id=${encodeURIComponent(item.fileId)}&sz=w1800`;
@@ -562,8 +708,8 @@
                 heroImage.src = imageUrl;
                 heroAmbient.src = imageUrl;
 
-                const geo = MEDIA_GEOTAGS[index] || '';
-                const dateline = `<p class="media-article-dateline">${item.date}${geo ? ' · ' + geo : ''}</p>`;
+                const geo = mediaGeo(item, index);
+                const dateline = `<p class="media-article-dateline">${item.date}${geo ? ' \u00b7 ' + geo : ''}</p>`;
 
                 text.innerHTML =
                     item.articleHtml ||
@@ -585,28 +731,27 @@
                 triggerBodyEnter('#mediaText');
             }
 
-            function transferToMedia(button, index) {
+            function selectMedia(button, index, immediate) {
                 const item = MEDIA_RELEASES[index];
-                if (!item) return;
-                mediaTransfer.transferTo(button, index, item.outlet, item.title, () => showMedia(index));
+                if (!item || !button) return;
+                selectCatalogueItem(mediaTransfer, list, button, index, item.title, () => showMedia(index), !!immediate);
             }
 
             window.showMediaArticle = function (index) {
                 const button = list.querySelector('button[data-media-index="' + index + '"]');
-                if (button) transferToMedia(button, index);
-                else showMedia(index);
+                if (button) selectMedia(button, index, false);
             };
 
             MEDIA_RELEASES.forEach((item, index) => {
                 const button = document.createElement('button');
                 button.type = 'button';
                 button.dataset.mediaIndex = String(index);
-                button.className = 'media-index-item';
+                button.className = 'media-index-item media-update-rubricator';
                 button.innerHTML = `
-                    <span class="media-index-item-outlet">${item.outlet}</span>
-                    <span class="media-index-item-arrow">↗</span>
+                    <span class="media-index-item-title">${item.title}</span>
+                    <span class="media-index-item-arrow" aria-hidden="true">\u2197</span>
                 `;
-                button.addEventListener('click', () => transferToMedia(button, index));
+                button.addEventListener('click', () => selectMedia(button, index, false));
                 list.appendChild(button);
             });
 
@@ -615,6 +760,7 @@
             window.resetMediaExplorer = resetMediaExplorer;
             resetMediaExplorer();
         }
+
         initMediaExplorer();
         initMediaMegaMarquee();
 
@@ -757,10 +903,10 @@
             const textEl = document.getElementById('missionText');
             const stageEl = document.getElementById('missionStage');
 
-            function transferToMission(button, idx) {
+            function selectMission(button, idx, immediate) {
                 const item = MISSION_FILES[idx];
-                if (!item) return;
-                missionTransfer.transferTo(button, idx, item.title, item.title, () => openMissionArticle(idx));
+                if (!item || !button) return;
+                selectCatalogueItem(missionTransfer, listEl, button, idx, item.title, () => openMissionArticle(idx), !!immediate);
             }
 
             function renderMissionIndex() {
@@ -768,12 +914,12 @@
                 MISSION_FILES.forEach((item, idx) => {
                     const button = document.createElement('button');
                     button.type = 'button';
-                    button.className = 'media-index-item mission-index-item';
+                    button.className = 'media-index-item mission-index-item media-update-rubricator';
                     button.innerHTML = `
                         <span class="media-index-item-title">${item.title}</span>
-                        <span class="media-index-item-arrow">↗</span>
+                        <span class="media-index-item-arrow" aria-hidden="true">↗</span>
                     `;
-                    button.addEventListener('click', () => transferToMission(button, idx));
+                    button.addEventListener('click', () => selectMission(button, idx, false));
                     listEl.appendChild(button);
                 });
                 if (countEl) countEl.textContent = String(MISSION_FILES.length).padStart(2,'0');
@@ -815,101 +961,133 @@
 
         initMissionExplorer();
 
-        function initDatabase() {
-        const ORYX_DATA = [
-            {
-                        "id": "sys-rocketship",
-                        "name": "ORYX ROCKETSHIP",
-                        "detailTitle": "Oryx Rocketship",
-                        "image": "assets/images/d3-41.png"
-            },
-            {
-                        "id": "stage-booster",
-                        "name": "R1V5 BOOSTER",
-                        "detailTitle": "R1v5 Booster"
-            },
-            {
-                        "id": "stage-d3",
-                        "name": "D3 CARGO SPACESHIP",
-                        "detailTitle": "D3 Cargo Spaceship",
-                        "image": "assets/images/oryx-orbit-2.png"
-            },
-            {
-                        "id": "infrastructure",
-                        "name": "GROUND INFRASTRUCTURE",
-                        "detailTitle": "Ground Infrastructure"
-            },
-            {
-                        "id": "location-kazakhstan",
-                        "name": "NEW SPACEPORT & PROPULSION TEST FACILITY, KAZAKHSTAN",
-                        "detailTitle": "Primary Pad, New Spaceport & Propulsion Test Facility"
-            },
-            {
-                        "id": "location-uae",
-                        "name": "HQ & MANUFACTURING FACILITY, UNITED ARAB EMIRATES",
-                        "detailTitle": "HQ & Manufacturing Facility"
-            },
-            {
-                        "id": "location-varna",
-                        "name": "R&D OFFICE",
-                        "detailTitle": "R&D Office"
-            }
-];
+        /* ============================================================================
+           SYSTEM ARCHITECTURE — same catalogue -> top-slot -> Transfer Band
+           interaction as Mission and Updates. Specifications are the supplied
+           brief, composed as labelled spec groups rather than loose paragraphs.
+           ============================================================================ */
+        function initArchitectureExplorer() {
+            const list = document.getElementById('oryxList');
+            const stage = document.getElementById('oryxStage');
+            const text = document.getElementById('oryxText');
+            if (!list || !stage || !text) return;
 
-        const list = document.getElementById('oryxList');
-            let selectableIndices = [];
-
-            function showEntry(dataIndex) {
-                const data = ORYX_DATA[dataIndex];
-                if (!data) return;
-                const title = document.getElementById('oryxTitle');
-                if (title) title.textContent = data.detailTitle || data.name;
-                const visual = document.getElementById('oryxVisual');
-                const img = document.getElementById('oryxImage');
-                if (visual && img) {
-                    if (data.image) {
-                        img.src = encodeURI(data.image);
-                        img.alt = data.detailTitle || data.name;
-                        visual.style.display = '';
-                    } else {
-                        img.removeAttribute('src');
-                        visual.style.display = 'none';
-                    }
+            const ARCHITECTURE_ENTRIES = [
+                {
+                    id: 'sys-rocketship',
+                    name: 'ORYX ROCKETSHIP',
+                    image: 'assets/images/system/R1V5.avif',
+                    imageAlt: 'Oryx Rocketship',
+                    html: `
+                        <p class="architecture-spec-lead">Reusable first and second stages</p>
+                        <div class="architecture-spec-group">
+                            <div class="architecture-spec-label">PAYLOAD MASS</div>
+                            <p>LEO \u2014 H=200 km, i=51.6\u00b0</p>
+                            <p>up to 5 t fully reusable</p>
+                        </div>
+                        <div class="architecture-spec-group">
+                            <div class="architecture-spec-label">PROPULSION</div>
+                            <p><span class="architecture-spec-sublabel">First stage</span>5 engines \u00d7 1,000 kN / 225,000 lbf</p>
+                            <p><span class="architecture-spec-sublabel">Second stage</span>5 engines \u00d7 200 kN / 45,000 lbf</p>
+                        </div>`
+                },
+                {
+                    id: 'stage-d3',
+                    name: 'D3 CARGO SPACESHIP',
+                    image: 'assets/images/system/S2_5.avif',
+                    imageAlt: 'D3 Cargo Spaceship',
+                    html: `
+                        <p class="architecture-spec-lead">Reusable second stage, first of the kind</p>
+                        <div class="architecture-spec-group">
+                            <div class="architecture-spec-label">UP TO 3 T</div>
+                            <p>to LEO and return to Earth</p>
+                        </div>
+                        <div class="architecture-spec-group">
+                            <div class="architecture-spec-label">CAPABILITIES</div>
+                            <ul class="architecture-spec-list">
+                                <li>Stations refuel and manoeuver</li>
+                                <li>Standalone orbital lab</li>
+                                <li>Future crew missions</li>
+                                <li>Future Moon missions</li>
+                            </ul>
+                        </div>`
+                },
+                {
+                    id: 'aspire-launcher',
+                    name: 'ASPIRE LAUNCHER',
+                    image: 'assets/images/system/Fairings_2.avif',
+                    imageAlt: 'Aspire Launcher',
+                    html: `
+                        <p class="architecture-spec-lead architecture-spec-kicker">R1 TWO-STAGE MEDIUM-LIFT LAUNCHER</p>
+                        <p class="architecture-spec-intro">Two-stage medium-lift space launch vehicle</p>
+                        <div class="architecture-spec-group">
+                            <div class="architecture-spec-label">LEO</div>
+                            <p>H=200 km, i=51.6\u00b0</p>
+                        </div>
+                        <div class="architecture-spec-group">
+                            <div class="architecture-spec-label">PAYLOAD</div>
+                            <p>15 t reusable</p>
+                            <p>17 t expendable</p>
+                        </div>
+                        <div class="architecture-spec-group">
+                            <div class="architecture-spec-label">REUSABILITY</div>
+                            <p>Reusable first stage and fairing leading to lower operating costs</p>
+                        </div>
+                        <div class="architecture-spec-group">
+                            <div class="architecture-spec-label">PROPULSION</div>
+                            <p>Green methane-oxygen engines optimized for reusability</p>
+                        </div>
+                        <div class="architecture-spec-group">
+                            <div class="architecture-spec-label">STRUCTURE</div>
+                            <p>Composite second stage with high mass ratio</p>
+                        </div>
+                        <div class="architecture-spec-group">
+                            <div class="architecture-spec-label">FAIRING</div>
+                            <p>First in class reusable fairing for launching satellites</p>
+                        </div>`
                 }
-                Array.from(list.querySelectorAll('button[data-index]')).forEach(btn => {
-                    const idx = parseInt(btn.getAttribute('data-index'), 10);
-                    btn.classList.toggle('is-active', idx === dataIndex);
+            ];
+
+            function showArchitectureEntry(index) {
+                const entry = ARCHITECTURE_ENTRIES[index];
+                if (!entry) return;
+                stage.classList.add('has-article');
+                const visual = entry.image
+                    ? `<figure class="architecture-spec-visual"><img src="${entry.image}" alt="${entry.imageAlt || entry.name}"></figure>`
+                    : '';
+                text.innerHTML = `<div class="architecture-spec-layout">${visual}<div class="architecture-spec-copy">${entry.html}</div></div>`;
+                list.querySelectorAll('button[data-architecture-index]').forEach(button => {
+                    const active = Number(button.dataset.architectureIndex) === index;
+                    button.classList.toggle('is-active', active);
+                    button.setAttribute('aria-current', active ? 'true' : 'false');
                 });
+                const scroll = stage.querySelector('.media-article-scroll');
+                if (scroll) scroll.scrollTop = 0;
                 triggerBodyEnter('#oryxText');
             }
 
-            function transferToOryx(btn, i, immediate) {
-                const data = ORYX_DATA[i];
-                if (!data) return;
-                architectureTransfer.transferTo(btn, i, data.name, data.detailTitle || data.name, () => showEntry(i), immediate);
+            function selectArchitecture(button, index, immediate) {
+                const entry = ARCHITECTURE_ENTRIES[index];
+                if (!entry || !button) return;
+                selectCatalogueItem(architectureTransfer, list, button, index, entry.name, () => showArchitectureEntry(index), !!immediate);
             }
 
-            const childIds = ['stage-booster', 'stage-d3', 'infrastructure'];
-            ORYX_DATA.forEach((item, i) => {
-                selectableIndices.push(i);
-                const btn = document.createElement('button');
-                btn.setAttribute('data-index', i);
-                const isChild = childIds.includes(item.id);
-                btn.className = 'media-index-item' + (isChild ? ' media-index-item--sub' : '');
-                btn.innerHTML = `<span class="media-index-item-outlet taxonomy-index-name">${item.name}</span><span class="media-index-item-arrow">↗</span>`;
-                btn.onclick = () => transferToOryx(btn, i, false);
-                list.appendChild(btn);
+            ARCHITECTURE_ENTRIES.forEach((entry, index) => {
+                const button = document.createElement('button');
+                button.type = 'button';
+                button.dataset.architectureIndex = String(index);
+                button.className = 'media-index-item architecture-rubricator';
+                button.innerHTML = `<span class="media-index-item-outlet taxonomy-index-name">${entry.name}</span><span class="media-index-item-arrow" aria-hidden="true">\u2197</span>`;
+                button.addEventListener('click', () => selectArchitecture(button, index, false));
+                list.appendChild(button);
             });
 
-            const countNode = document.getElementById('oryxCount');
-            if (countNode) countNode.remove();
-            if (selectableIndices.length > 0) {
-                const firstIndex = selectableIndices[0];
-                transferToOryx(list.children[firstIndex], firstIndex, true);
-            }
+            const first = list.querySelector('button[data-architecture-index="0"]');
+            if (first) selectArchitecture(first, 0, true);
         }
 
-        initDatabase();
+        initArchitectureExplorer();
+
 
     
 
