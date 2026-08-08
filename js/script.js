@@ -1,5 +1,280 @@
         lucide.createIcons();
 
+        /* ============================================================================
+           TransferCardController — the one shared A -> B -> C interaction for
+           SYSTEM ARCHITECTURE, MISSION and UPDATES.
+
+           The clicked rubricator row becomes a single moving element (backing +
+           border + both chamfers + text, all one node) that rises to a common
+           rail (vertical only), then travels right to dock as the destination
+           heading (horizontal only, width/typography morph via a same-shell
+           text crossfade). It remains mounted there — there is no second,
+           independent destination heading.
+
+           Geometry is measured from the live DOM (getBoundingClientRect,
+           relative to the unified frame) every time, never hardcoded per item
+           or per index, so rubricator entries can be added or removed with no
+           animation change.
+           ============================================================================ */
+        function TransferCardController(cfg) {
+            this.frame = document.querySelector(cfg.frame);
+            this.rail = document.querySelector(cfg.rail);
+            this.railLive = cfg.railLive ? document.querySelector(cfg.railLive) : null;
+            this.generation = 0;
+            this.animations = [];
+            this.timers = [];
+            this.card = null;
+            this.cardSourceText = null;
+            this.cardTargetText = null;
+            this.sourceLabel = null;
+            this.dockedIndex = null;
+            this.dockedRow = null;
+            if (this.frame) {
+                let layer = this.frame.querySelector('.transfer-layer');
+                if (!layer) {
+                    layer = document.createElement('div');
+                    layer.className = 'transfer-layer';
+                    this.frame.appendChild(layer);
+                }
+                this.layer = layer;
+            }
+        }
+
+        TransferCardController.V_EASE = 'cubic-bezier(.20,.70,.25,1)';
+        TransferCardController.H_EASE = 'cubic-bezier(.22,1,.36,1)';
+        TransferCardController.H_DURATION = 350;
+
+        TransferCardController.reducedMotion = function () {
+            return window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+        };
+        TransferCardController.stackedLayout = function () {
+            return window.matchMedia && window.matchMedia('(max-width: 680px)').matches;
+        };
+        TransferCardController.clamp = function (v, lo, hi) {
+            return Math.min(hi, Math.max(lo, v));
+        };
+
+        TransferCardController.prototype._ensureCard = function () {
+            if (this.card) return this.card;
+            const card = document.createElement('div');
+            card.className = 'transfer-card';
+            card.setAttribute('aria-hidden', 'true');
+            const source = document.createElement('span');
+            source.className = 'transfer-card-text transfer-card-text--source';
+            const target = document.createElement('span');
+            target.className = 'transfer-card-text transfer-card-text--target';
+            card.appendChild(source);
+            card.appendChild(target);
+            this.layer.appendChild(card);
+            this.card = card;
+            this.cardSourceText = source;
+            this.cardTargetText = target;
+            return card;
+        };
+
+        TransferCardController.prototype._applyTypography = function (el, cs) {
+            el.style.fontFamily = cs.fontFamily;
+            el.style.fontWeight = cs.fontWeight;
+            el.style.fontSize = cs.fontSize;
+            el.style.letterSpacing = cs.letterSpacing;
+            el.style.lineHeight = cs.lineHeight;
+            el.style.textTransform = cs.textTransform;
+            el.style.color = cs.color;
+            el.style.justifyContent = cs.textAlign === 'center' ? 'center' : (cs.textAlign === 'right' ? 'flex-end' : 'flex-start');
+        };
+
+        TransferCardController.prototype._cancelActive = function () {
+            this.generation++;
+            this.animations.forEach(function (a) { try { a.cancel(); } catch (err) {} });
+            this.animations = [];
+            this.timers.forEach(function (t) { clearTimeout(t); });
+            this.timers = [];
+        };
+
+        TransferCardController.prototype._restorePreviousLabel = function () {
+            if (this.sourceLabel) {
+                this.sourceLabel.classList.remove('media-index-item--transferring');
+                this.sourceLabel = null;
+            }
+        };
+
+        /* Snap the docked card back onto the rail with no animation — used after
+           resize, where an in-flight or already-landed card's pixel geometry is
+           stale relative to the (possibly reflowed) frame. */
+        TransferCardController.prototype.resync = function () {
+            if (!this.card || this.dockedIndex === null || !this.frame || !this.rail) return;
+            this._cancelActive();
+            const frameRect = this.frame.getBoundingClientRect();
+            const targetRect = this.rail.getBoundingClientRect();
+            this.card.style.left = (targetRect.left - frameRect.left) + 'px';
+            this.card.style.top = (targetRect.top - frameRect.top) + 'px';
+            this.card.style.width = targetRect.width + 'px';
+            this.card.style.height = targetRect.height + 'px';
+        };
+
+        /* Cancel any in-flight transfer, restore the idle state and hide the
+           card. Used when a modal/explorer resets to its idle view. */
+        TransferCardController.prototype.reset = function () {
+            this._cancelActive();
+            this._restorePreviousLabel();
+            this.dockedIndex = null;
+            this.dockedRow = null;
+            if (this.card) this.card.style.display = 'none';
+        };
+
+        /*
+           row            — the clicked rubricator <button>
+           index          — its stable index (used only for de-duping repeats)
+           sourceText     — text as shown in the rubricator row
+           targetText     — text as it should read once docked (may differ, e.g.
+                             System Architecture's short nav label vs. its full
+                             detail title, or Updates' outlet badge vs. headline)
+           prepareContent — synchronous callback: unhides the article pane and
+                             populates body content (image/text/etc). Runs before
+                             the destination rail is measured, so a pane that was
+                             `hidden` reports real geometry.
+           immediate      — skip the animation and dock directly (initial load)
+        */
+        TransferCardController.prototype.transferTo = function (row, index, sourceText, targetText, prepareContent, immediate) {
+            if (!this.frame || !this.rail || !row) return;
+
+            const frameRectBefore = this.frame.getBoundingClientRect();
+            const sourceRect = row.getBoundingClientRect();
+            const sourceCS = getComputedStyle(row);
+
+            this._cancelActive();
+            const token = this.generation;
+
+            this._restorePreviousLabel();
+            row.classList.add('media-index-item--transferring');
+            this.sourceLabel = row;
+            this.dockedIndex = index;
+            this.dockedRow = row;
+
+            if (typeof prepareContent === 'function') prepareContent();
+
+            if (this.railLive) this.railLive.textContent = targetText;
+
+            const card = this._ensureCard();
+            card.style.display = '';
+
+            const frameRect = this.frame.getBoundingClientRect();
+            const targetRect = this.rail.getBoundingClientRect();
+            const targetCS = getComputedStyle(this.rail);
+
+            const start = {
+                x: sourceRect.left - frameRect.left,
+                y: sourceRect.top - frameRect.top,
+                width: sourceRect.width,
+                height: sourceRect.height
+            };
+            const dock = {
+                x: targetRect.left - frameRect.left,
+                y: targetRect.top - frameRect.top,
+                width: targetRect.width,
+                height: targetRect.height
+            };
+
+            card.style.left = start.x + 'px';
+            card.style.top = start.y + 'px';
+            card.style.width = start.width + 'px';
+            card.style.height = start.height + 'px';
+
+            this.cardSourceText.textContent = sourceText;
+            this._applyTypography(this.cardSourceText, sourceCS);
+            this.cardSourceText.style.opacity = '1';
+
+            this.cardTargetText.textContent = targetText;
+            this._applyTypography(this.cardTargetText, targetCS);
+            this.cardTargetText.style.opacity = '0';
+
+            const self = this;
+            const finish = function () {
+                if (token !== self.generation) return;
+                card.style.left = dock.x + 'px';
+                card.style.top = dock.y + 'px';
+                card.style.width = dock.width + 'px';
+                card.style.height = dock.height + 'px';
+                self.cardSourceText.style.opacity = '0';
+                self.cardTargetText.style.opacity = '1';
+                self.animations = [];
+            };
+
+            if (immediate || TransferCardController.reducedMotion() || TransferCardController.stackedLayout()) {
+                finish();
+                return;
+            }
+
+            const dy = dock.y - start.y;
+            const vDuration = TransferCardController.clamp(Math.abs(dy) * 0.35, 100, 220);
+
+            const vAnim = card.animate(
+                [{ transform: 'translate(0px,0px)' }, { transform: 'translate(0px,' + dy + 'px)' }],
+                { duration: vDuration, easing: TransferCardController.V_EASE, fill: 'forwards' }
+            );
+            this.animations = [vAnim];
+
+            // Phase sequencing runs on setTimeout, not Animation#finished: under an
+            // interrupted (cancel + immediately re-animate) sequence a just-cancelled
+            // Animation's `finished` promise can sit pending well past its nominal
+            // duration before the browser settles it, which would stall the very next
+            // phase. A timer keyed to the same duration is unaffected and keeps rapid
+            // repeated clicks responsive; token/generation guards below still make any
+            // stale timer a no-op.
+            const phase1Timer = setTimeout(function () {
+                if (token !== self.generation) return;
+                card.style.top = dock.y + 'px';
+                card.style.transform = '';
+                try { vAnim.cancel(); } catch (err) {}
+
+                const hAnim = card.animate(
+                    [
+                        { left: start.x + 'px', width: start.width + 'px', height: start.height + 'px' },
+                        { left: dock.x + 'px', width: dock.width + 'px', height: dock.height + 'px' }
+                    ],
+                    { duration: TransferCardController.H_DURATION, easing: TransferCardController.H_EASE, fill: 'forwards' }
+                );
+                const outAnim = self.cardSourceText.animate(
+                    [{ opacity: 1 }, { opacity: 1, offset: 0.35 }, { opacity: 0 }],
+                    { duration: TransferCardController.H_DURATION, easing: 'linear', fill: 'forwards' }
+                );
+                const inAnim = self.cardTargetText.animate(
+                    [{ opacity: 0 }, { opacity: 0, offset: 0.55 }, { opacity: 1 }],
+                    { duration: TransferCardController.H_DURATION, easing: 'linear', fill: 'forwards' }
+                );
+                self.animations = [hAnim, outAnim, inAnim];
+
+                const phase2Timer = setTimeout(function () {
+                    if (token !== self.generation) return;
+                    try { hAnim.cancel(); outAnim.cancel(); inAnim.cancel(); } catch (err) {}
+                    finish();
+                }, TransferCardController.H_DURATION);
+                self.timers = [phase2Timer];
+            }, vDuration);
+            this.timers = [phase1Timer];
+        };
+
+        const architectureTransfer = new TransferCardController({
+            frame: '#architectureWorkspace',
+            rail: '#oryxTitle',
+            railLive: '#oryxTitleLive'
+        });
+        const missionTransfer = new TransferCardController({
+            frame: '#missionWorkspace',
+            rail: '#missionTitle',
+            railLive: '#missionTitleLive'
+        });
+        const mediaTransfer = new TransferCardController({
+            frame: '#mediaWorkspace',
+            rail: '#mediaTitle',
+            railLive: '#mediaTitleLive'
+        });
+        window.addEventListener('resize', function () {
+            architectureTransfer.resync();
+            missionTransfer.resync();
+            mediaTransfer.resync();
+        });
+
         function openModal(id) {
             const modal = document.getElementById(id);
             if (!modal) return;
@@ -250,6 +525,7 @@
                 title.textContent = 'Select Update';
                 if (chromeTitle) chromeTitle.textContent = '';
                 articleScroll.scrollTop = 0;
+                mediaTransfer.reset();
 
                 requestAnimationFrame(() => {
                     if (window.mediaSilverWorldMap) window.mediaSilverWorldMap.resize();
@@ -306,10 +582,20 @@
                 }
 
                 articleScroll.scrollTop = 0;
+                triggerBodyEnter('#mediaText');
             }
 
-            window.showMediaArticle = showMedia;
+            function transferToMedia(button, index) {
+                const item = MEDIA_RELEASES[index];
+                if (!item) return;
+                mediaTransfer.transferTo(button, index, item.outlet, item.title, () => showMedia(index));
+            }
 
+            window.showMediaArticle = function (index) {
+                const button = list.querySelector('button[data-media-index="' + index + '"]');
+                if (button) transferToMedia(button, index);
+                else showMedia(index);
+            };
 
             MEDIA_RELEASES.forEach((item, index) => {
                 const button = document.createElement('button');
@@ -320,7 +606,7 @@
                     <span class="media-index-item-outlet">${item.outlet}</span>
                     <span class="media-index-item-arrow">↗</span>
                 `;
-                button.addEventListener('click', () => showMedia(index));
+                button.addEventListener('click', () => transferToMedia(button, index));
                 list.appendChild(button);
             });
 
@@ -471,6 +757,12 @@
             const textEl = document.getElementById('missionText');
             const stageEl = document.getElementById('missionStage');
 
+            function transferToMission(button, idx) {
+                const item = MISSION_FILES[idx];
+                if (!item) return;
+                missionTransfer.transferTo(button, idx, item.title, item.title, () => openMissionArticle(idx));
+            }
+
             function renderMissionIndex() {
                 listEl.innerHTML = '';
                 MISSION_FILES.forEach((item, idx) => {
@@ -481,7 +773,7 @@
                         <span class="media-index-item-title">${item.title}</span>
                         <span class="media-index-item-arrow">↗</span>
                     `;
-                    button.addEventListener('click', () => openMissionArticle(idx));
+                    button.addEventListener('click', () => transferToMission(button, idx));
                     listEl.appendChild(button);
                 });
                 if (countEl) countEl.textContent = String(MISSION_FILES.length).padStart(2,'0');
@@ -501,6 +793,7 @@
                 });
                 const scroll = document.getElementById('missionArticleScroll');
                 if (scroll) scroll.scrollTop = 0;
+                triggerBodyEnter('#missionText');
             }
 
             function resetMissionExplorer() {
@@ -508,6 +801,7 @@
                 idleEl.classList.remove('hidden');
                 stageEl?.classList.remove('has-article');
                 Array.from(listEl.querySelectorAll('.media-index-item')).forEach(node => node.classList.remove('is-active'));
+                missionTransfer.reset();
             }
 
             backBtn?.addEventListener('click', resetMissionExplorer);
@@ -586,6 +880,13 @@
                     const idx = parseInt(btn.getAttribute('data-index'), 10);
                     btn.classList.toggle('is-active', idx === dataIndex);
                 });
+                triggerBodyEnter('#oryxText');
+            }
+
+            function transferToOryx(btn, i, immediate) {
+                const data = ORYX_DATA[i];
+                if (!data) return;
+                architectureTransfer.transferTo(btn, i, data.name, data.detailTitle || data.name, () => showEntry(i), immediate);
             }
 
             const childIds = ['stage-booster', 'stage-d3', 'infrastructure'];
@@ -596,13 +897,16 @@
                 const isChild = childIds.includes(item.id);
                 btn.className = 'media-index-item' + (isChild ? ' media-index-item--sub' : '');
                 btn.innerHTML = `<span class="media-index-item-outlet taxonomy-index-name">${item.name}</span><span class="media-index-item-arrow">↗</span>`;
-                btn.onclick = () => showEntry(i);
+                btn.onclick = () => transferToOryx(btn, i, false);
                 list.appendChild(btn);
             });
 
             const countNode = document.getElementById('oryxCount');
             if (countNode) countNode.remove();
-            if (selectableIndices.length > 0) showEntry(selectableIndices[0]);
+            if (selectableIndices.length > 0) {
+                const firstIndex = selectableIndices[0];
+                transferToOryx(list.children[firstIndex], firstIndex, true);
+            }
         }
 
         initDatabase();
@@ -970,220 +1274,15 @@
     observer.observe(document.body, {subtree:true, childList:true, characterData:true});
 })();
 
-/* ============================================================================
-   HeadingTransferController — one mechanism for MISSION and SYSTEM ARCHITECTURE.
-   Path is always A -> B -> C: vertical alignment first, then horizontal transfer
-   with a synchronised in-place plate reveal. Geometry is measured, never hardcoded,
-   so entries can be added or removed with no animation change.
-   ============================================================================ */
-(function () {
-  const SECTIONS = [
-    { list: '#missionList', title: '#missionTitle', body: '#missionText', reveal: '#missionReveal', mode: 'transfer' },
-    { list: '#oryxList',    title: '#oryxTitle',    body: '#oryxText',    reveal: '#oryxReveal',    mode: 'transfer' },
-    { list: '#mediaList',   title: '#mediaTitle',   body: '#mediaText',   mode: 'stroke' }
-  ];
-
-  const H_DURATION = 340;
-  const V_EASE = 'cubic-bezier(.20,.70,.25,1)';
-  const H_EASE = 'cubic-bezier(.22,1,.36,1)';
-  const clamp = function (v, lo, hi) { return Math.min(hi, Math.max(lo, v)); };
-  const reduced = function () {
-    return window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
-  };
-
-  function overlay() {
-    let el = document.getElementById('flightOverlay');
-    if (!el) {
-      el = document.createElement('div');
-      el.id = 'flightOverlay';
-      document.body.appendChild(el);
-    }
-    return el;
-  }
-
-  function copyType(node, cs) {
-    node.style.fontFamily = cs.fontFamily;
-    node.style.fontWeight = cs.fontWeight;
-    node.style.fontSize = cs.fontSize;
-    node.style.letterSpacing = cs.letterSpacing;
-    node.style.lineHeight = cs.lineHeight;
-    node.style.textTransform = cs.textTransform;
-    node.style.color = cs.color;
-  }
-
-  function Controller(cfg) {
-    this.cfg = cfg;
-    this.generation = 0;
-    this.anims = [];
-    this.flight = null;
-    this.hiddenLabel = null;
-  }
-
-  Controller.prototype.abort = function () {
-    // Invalidate stale callbacks, drop the clone, restore what was hidden.
-    this.generation++;
-    this.anims.forEach(function (a) { try { a.cancel(); } catch (err) {} });
-    this.anims = [];
-    if (this.flight) { this.flight.remove(); this.flight = null; }
-    if (this.hiddenLabel) { this.hiddenLabel.style.visibility = ''; this.hiddenLabel = null; }
-    const title = document.querySelector(this.cfg.title);
-    if (title) title.style.visibility = '';
-    const rev = this.cfg.reveal && document.querySelector(this.cfg.reveal);
-    if (rev) rev.style.clipPath = '';
-  };
-
-  Controller.prototype.run = function (row) {
-    const cfg = this.cfg;
-    const title = document.querySelector(cfg.title);
-    if (!title) return;
-
-    const label = row.querySelector('.media-index-item-outlet, .media-index-item-title') || row;
-    const sourceRect = label.getBoundingClientRect();   // captured BEFORE state changes
-    const sourceType = getComputedStyle(label);
-    const sourceText = label.textContent;
-
-    this.abort();
-    const token = this.generation;
-    const self = this;
-    const rev = cfg.reveal ? document.querySelector(cfg.reveal) : null;
-
-    if (reduced()) { this.enterBody(); return; }
-
-    // Old right-hand heading disappears on this very frame — never two at once.
-    title.style.visibility = 'hidden';
-    if (rev) rev.style.clipPath = 'inset(0 100% 0 0)';
-    label.style.visibility = 'hidden';   // layout preserved
-    this.hiddenLabel = label;
-    this.enterBody();
-
-    requestAnimationFrame(function () {
-      if (token !== self.generation) return;
-      const targetRect = title.getBoundingClientRect();  // measured after content commits
-      if (!sourceRect.width || !targetRect.width) { self.abort(); return; }
-
-      const targetType = getComputedStyle(title);
-      const dx = targetRect.left - sourceRect.left;
-      const dy = targetRect.top - sourceRect.top;
-      const sourceSize = parseFloat(sourceType.fontSize) || 13;
-      const targetSize = parseFloat(targetType.fontSize) || 28;
-
-      // Movement and typography live on different nodes: no reflow mid-flight.
-      const positioner = document.createElement('div');
-      positioner.className = 'flight-positioner';
-      positioner.style.left = sourceRect.left + 'px';
-      positioner.style.top = sourceRect.top + 'px';
-
-      const text = document.createElement('div');
-      text.className = 'flight-text';
-
-      const srcVisual = document.createElement('div');
-      srcVisual.className = 'flight-visual flight-visual--source';
-      srcVisual.textContent = sourceText;
-      copyType(srcVisual, sourceType);
-
-      const tgtVisual = document.createElement('div');
-      tgtVisual.className = 'flight-visual';
-      tgtVisual.textContent = title.textContent;
-      copyType(tgtVisual, targetType);
-      tgtVisual.style.opacity = '0';
-      tgtVisual.style.transformOrigin = 'left top';
-      tgtVisual.style.transform = 'scale(' + (sourceSize / targetSize) + ')';
-
-      text.appendChild(srcVisual);
-      text.appendChild(tgtVisual);
-      positioner.appendChild(text);
-      overlay().appendChild(positioner);
-      self.flight = positioner;
-
-      // Phase 1 length follows the distance actually travelled.
-      const vDuration = clamp(Math.abs(dy) * 0.35, 110, 190);
-
-      const vAnim = positioner.animate(
-        [{ transform: 'translate(0px, 0px)' }, { transform: 'translate(0px, ' + dy + 'px)' }],
-        { duration: vDuration, easing: V_EASE, fill: 'both' }
-      );
-      const hAnim = positioner.animate(
-        [{ transform: 'translate(0px, ' + dy + 'px)' }, { transform: 'translate(' + dx + 'px, ' + dy + 'px)' }],
-        { duration: H_DURATION, delay: vDuration, easing: H_EASE, fill: 'both' }
-      );
-      // Typography morph completes before landing.
-      const scaleAnim = text.animate(
-        [{ transform: 'scale(1)' }, { transform: 'scale(' + (targetSize / sourceSize) + ')' }],
-        { duration: H_DURATION, delay: vDuration, easing: H_EASE, fill: 'both' }
-      );
-      text.style.transformOrigin = 'left top';
-      const outAnim = srcVisual.animate(
-        [{ opacity: 1 }, { opacity: 0, offset: 0.8 }, { opacity: 0 }],
-        { duration: H_DURATION, delay: vDuration, easing: 'linear', fill: 'both' }
-      );
-      const inAnim = tgtVisual.animate(
-        [
-          { opacity: 0, transform: 'scale(' + (sourceSize / targetSize) + ')' },
-          { opacity: 1, transform: 'scale(1)', offset: 0.8 },
-          { opacity: 1, transform: 'scale(1)' }
-        ],
-        { duration: H_DURATION, delay: vDuration, easing: 'linear', fill: 'both' }
-      );
-
-      self.anims = [vAnim, hAnim, scaleAnim, outAnim, inAnim];
-
-      // Plate reveal starts with phase 2 and lands with the title.
-      if (rev) {
-        const rAnim = rev.animate(
-          [{ clipPath: 'inset(0 100% 0 0)' }, { clipPath: 'inset(0 0 0 0)' }],
-          { duration: H_DURATION, delay: vDuration, easing: H_EASE, fill: 'both' }
-        );
-        self.anims.push(rAnim);
-      }
-
-      hAnim.finished.then(function () {
-        if (token !== self.generation) return;
-        title.style.visibility = '';
-        label.style.visibility = '';
-        if (rev) rev.style.clipPath = '';
-        positioner.remove();
-        self.flight = null;
-        self.hiddenLabel = null;
-        self.anims = [];
-      }).catch(function () {});
-    });
-  };
-
-  Controller.prototype.enterBody = function () {
-    const bodyEl = document.querySelector(this.cfg.body);
-    if (!bodyEl) return;
-    bodyEl.classList.remove('article-body-enter');
-    void bodyEl.offsetWidth;
-    bodyEl.classList.add('article-body-enter');
-  };
-
-  /* Updates keeps its in-place marker stroke on the inline plate. */
-  function stroke(cfg) {
-    const title = document.querySelector(cfg.title);
-    if (!title) return;
-    if (title.__anim) title.__anim.cancel();
-    const a = title.animate(
-      [{ clipPath: 'inset(0 100% 0 0)' }, { clipPath: 'inset(0 0 0 0)' }],
-      { duration: 460, easing: H_EASE, fill: 'both' }
-    );
-    title.__anim = a;
-    a.finished.then(function () { title.style.clipPath = ''; title.__anim = null; }).catch(function () {});
-  }
-
-  SECTIONS.forEach(function (cfg) {
-    const ctl = new Controller(cfg);
-    document.addEventListener('click', function (ev) {
-      if (!ev.target.closest) return;
-      const row = ev.target.closest(cfg.list + ' .media-index-item');
-      if (!row) return;
-      setTimeout(function () {
-        if (cfg.mode === 'transfer') ctl.run(row);
-        else { stroke(cfg); ctl.enterBody(); }
-      }, 0);
-    }, true);
-    window.addEventListener('resize', function () { ctl.abort(); });
-  });
-})();
+/* Body-content entrance fade, decoupled from the (now shared) heading
+   transfer — unrelated to and unaffected by TransferCardController. */
+function triggerBodyEnter(selector) {
+  const el = document.querySelector(selector);
+  if (!el) return;
+  el.classList.remove('article-body-enter');
+  void el.offsetWidth;
+  el.classList.add('article-body-enter');
+}
 
 /* ============================================================================
    0A — SYSTEM ARCHITECTURE heading: proportional shift and a heavier weight,

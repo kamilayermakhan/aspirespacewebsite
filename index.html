@@ -58,7 +58,7 @@
 <div class="media-shell-header">
 <span class="technical-label flex items-center gap-2"> SYSTEM ARCHITECTURE</span>
 </div>
-<div class="media-workspace architecture-workspace">
+<div class="media-workspace architecture-workspace" id="architectureWorkspace">
 <aside class="media-index-pane">
 <div class="media-index-list" id="oryxList"></div>
 </aside>
@@ -66,7 +66,8 @@
 <article class="media-article-pane">
 <div class="media-article-scroll">
 <header class="media-article-header">
-<div class="headline-slot"><div class="headline-reveal" id="oryxReveal"><div class="headline-plate"></div></div><h2 class="media-title" id="oryxTitle">Select Component</h2></div>
+<h2 class="media-title transfer-rail" id="oryxTitle">Select Component</h2>
+<span class="transfer-rail-a11y" id="oryxTitleLive"></span>
 </header>
 <div class="media-article-body" id="oryxText">
 <figure class="media-article-visual" id="oryxVisual" style="display:none"><img alt="" id="oryxImage"/></figure>
@@ -74,6 +75,7 @@
 </div>
 </article>
 </section>
+<div class="transfer-layer" aria-hidden="true"></div>
 </div>
 </div>
 </section>
@@ -175,7 +177,7 @@ The first orbital launch places the system into its intended operating regime an
 <span class="technical-label flex items-center gap-2"> MISSION ↘</span>
 <button aria-label="Close Mission" class="media-shell-close" onclick="closeModal('mission-modal')" type="button">✕</button>
 </div>
-<div class="media-workspace"><canvas aria-hidden="true" class="media-background-map" id="missionBackdropGl"></canvas>
+<div class="media-workspace" id="missionWorkspace"><canvas aria-hidden="true" class="media-background-map" id="missionBackdropGl"></canvas>
 <aside class="media-index-pane">
 
 <div class="media-index-list" id="missionList"></div>
@@ -191,7 +193,8 @@ The first orbital launch places the system into its intended operating regime an
 <article class="media-article-pane hidden" id="missionArticlePane">
 <div class="media-article-scroll" id="missionArticleScroll">
 <header class="media-article-header">
-<div class="headline-slot"><div class="headline-reveal" id="missionReveal"><div class="headline-plate"></div></div><h2 class="media-title" id="missionTitle"></h2></div>
+<h2 class="media-title transfer-rail" id="missionTitle"></h2>
+<span class="transfer-rail-a11y" id="missionTitleLive"></span>
 </header>
 
 
@@ -199,6 +202,7 @@ The first orbital launch places the system into its intended operating regime an
 </div>
 </article>
 </section>
+<div class="transfer-layer" aria-hidden="true"></div>
 </div>
 </div>
 </div>
@@ -209,7 +213,7 @@ The first orbital launch places the system into its intended operating regime an
 <span class="technical-label flex items-center gap-2"> UPDATES ↘</span>
 <button aria-label="Close Media and Press" class="media-shell-close" onclick="closeModal('media-modal')" type="button">✕</button>
 </div>
-<div class="media-workspace"><canvas aria-hidden="true" class="media-background-map" id="mediaBackgroundGl"></canvas>
+<div class="media-workspace" id="mediaWorkspace"><canvas aria-hidden="true" class="media-background-map" id="mediaBackgroundGl"></canvas>
 <aside class="media-index-pane">
 <div class="media-index-list" id="mediaList"></div>
 </aside>
@@ -225,7 +229,8 @@ The first orbital launch places the system into its intended operating regime an
 <article class="media-article-pane hidden" id="mediaArticlePane">
 <div class="media-article-scroll" id="mediaArticleScroll">
 <header class="media-article-header">
-<h2 class="media-title" id="mediaTitle">Select Update</h2>
+<h2 class="media-title transfer-rail" id="mediaTitle">Select Update</h2>
+<span class="transfer-rail-a11y" id="mediaTitleLive"></span>
 </header>
 <figure class="media-article-visual">
 <img alt="" aria-hidden="true" class="media-article-visual-ambient" id="mediaHeroAmbient"/>
@@ -236,6 +241,7 @@ The first orbital launch places the system into its intended operating regime an
 </div>
 </article>
 </section>
+<div class="transfer-layer" aria-hidden="true"></div>
 </div>
 </div>
 </div>

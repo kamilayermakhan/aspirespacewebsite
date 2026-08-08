@@ -814,6 +814,7 @@
         }
 
         .media-workspace {
+            position: relative;
             min-height: 0;
             flex: 1;
             display: grid;
@@ -3058,11 +3059,9 @@ body .mission-shell .media-article-header { padding-top: 18px !important; border
   padding: 8px !important;
   background: transparent !important;
 }
-.media-workspace > .media-index-pane,
-.media-workspace > .media-stage {
-  border: 1px solid rgba(161, 161, 170, 0.3) !important;
-}
-.media-workspace > .media-index-pane { border-right-width: 1px !important; }
+/* Unified frame: the workspace itself owns the outer border (see .media-shell);
+   internally there is only the one vertical divider (below, "One border per
+   pane"), not a second bordered box around the stage. */
 .media-index-item {
   border-bottom: 1px solid rgba(161, 161, 170, 0.16) !important;
 }
@@ -3224,7 +3223,6 @@ figure.media-article-visual,
 }
 .media-article-visual img { display: block; width: 100%; height: auto; }
 
-.headline-flying { will-change: transform; transform-origin: left top; position: relative; z-index: 60; }
 .article-body-enter { animation: articleBodyIn 420ms cubic-bezier(0.22, 1, 0.36, 1) 120ms both; }
 @keyframes articleBodyIn {
   from { opacity: 0; transform: translateY(8px); }
@@ -3288,17 +3286,6 @@ header > div {
   padding-right: var(--site-gutter) !important;
 }
 
-/* Flying clone. */
-/* The flying object is a clone of the index row: text + its faceted plate. */
-.headline-ghost {
-  position: fixed;
-  margin: 0;
-  z-index: 200;
-  pointer-events: none;
-  transform-origin: left top;
-  transform-style: preserve-3d;
-  box-sizing: border-box;
-}
 /* Landed headline wears the same plate as the row it came from. */
 body #media-modal .media-article-header,
 body .mission-shell .media-article-header,
@@ -3307,31 +3294,11 @@ body .architecture-shell .media-article-header {
   height: auto !important;
   min-height: 0 !important;
 }
-body #media-modal .media-title {
-  display: inline-block !important;
-  text-align: left !important;
-  padding: 10px 18px;
-  background-image: linear-gradient(90deg, rgba(244,245,248,.2), rgba(244,245,248,.05) 55%, rgba(244,245,248,.12));
-  box-shadow: inset 0 1px 0 rgba(255,255,255,.28);
-  border-top: 2px solid #ffffff;
-  clip-path: polygon(10px 0, calc(100% - 10px) 0, 100% 10px, 100% 100%, 0 100%, 0 10px);
-}
 /* Full-width headline band for Mission and System Architecture. */
 body .mission-shell .media-article-header,
 body .architecture-shell .media-article-header {
   position: relative;
   padding: 0 !important;
-}
-.headline-band {
-  position: relative;
-  display: block;
-  width: 100%;
-  padding: 12px 18px;
-  box-sizing: border-box;
-  background-image: linear-gradient(90deg, rgba(244,245,248,.2), rgba(244,245,248,.05) 55%, rgba(244,245,248,.12));
-  box-shadow: inset 0 1px 0 rgba(255,255,255,.28);
-  border-top: 2px solid #ffffff;
-  clip-path: polygon(10px 0, calc(100% - 10px) 0, 100% 10px, 100% 100%, 0 100%, 0 10px);
 }
 body .mission-shell .media-title,
 body .architecture-shell .media-title {
@@ -3344,26 +3311,6 @@ body .architecture-shell .media-title {
   box-shadow: none !important;
   clip-path: none !important;
 }
-.headline-travel {
-  position: fixed;
-  margin: 0;
-  z-index: 200;
-  pointer-events: none;
-  white-space: nowrap;
-  transform-origin: left top;
-  color: #ffffff;
-}
-.headline-ghost-stage {
-  position: fixed;
-  inset: 0;
-  z-index: 200;
-  pointer-events: none;
-  perspective: 1000px;
-}
-.headline-landing-hidden { visibility: hidden; }
-.headline-outgoing { animation: headlineOut 90ms linear both; }
-@keyframes headlineOut { to { opacity: 0; } }
-
 body #media-modal .media-title,
 body .mission-shell .media-title,
 body .architecture-shell h2#oryxTitle {
@@ -3401,12 +3348,6 @@ body .aspire-hero .hero-headline {
 .media-shell-header {
   border-bottom: 1px solid var(--deco-line) !important;
   box-shadow: 0 3px 0 -1px rgba(228, 230, 238, 0.5);
-}
-.media-workspace > .media-index-pane,
-.media-workspace > .media-stage {
-  border: 1px solid var(--deco-line) !important;
-  outline: 1px solid rgba(228, 230, 238, 0.4);
-  outline-offset: 2px;
 }
 .media-index-item {
   border-bottom: 1px solid rgba(228, 230, 238, 0.42) !important;
@@ -3454,45 +3395,95 @@ body .mission-shell .media-title,
 body .architecture-shell h2#oryxTitle {
   letter-spacing: .06em !important;
 }
-/* ---------- Heading slot: permanent target, two-layer plate ---------- */
-.headline-slot {
-  position: relative;
-  display: block;
-  width: 100%;
-  padding: 12px 18px;
+/* ============================================================================
+   TRANSFER CARD — one shared component for SYSTEM ARCHITECTURE, MISSION and
+   UPDATES (see js/script.js: TransferCardController). The clicked rubricator
+   card becomes this one element: backing, border and both chamfers move as a
+   single object, and it stays mounted as the destination heading once
+   docked — there is no separate destination plate.
+
+   #oryxTitle / #missionTitle / #mediaTitle keep every rule already scoped to
+   them (font, size, weight, letter-spacing, max-width, alignment) and now
+   additionally serve as the invisible destination geometry/typography
+   reference (.transfer-rail): a real box with real computed style, nothing
+   drawn. A small sr-only sibling (.transfer-rail-a11y) carries the same text
+   for assistive tech, since the visible heading itself is decorative.
+   ============================================================================ */
+:root {
+  --transfer-card-fill: linear-gradient(90deg, rgba(244,245,248,.2), rgba(244,245,248,.05) 55%, rgba(244,245,248,.12));
+  --transfer-card-border: #ffffff;
+  --transfer-card-text: var(--deco-brass, #f4f5f8);
+  --transfer-card-chamfer: 10px;
+}
+#oryxTitle.transfer-rail,
+#missionTitle.transfer-rail,
+#mediaTitle.transfer-rail {
+  visibility: hidden;
+  display: block !important;
+  width: 100% !important;
+  padding: 12px 18px !important;
   box-sizing: border-box;
 }
-.headline-reveal {
+.transfer-rail-a11y {
   position: absolute;
-  inset: 0;
-  clip-path: inset(0 0 0 0);
-  pointer-events: none;
-}
-.headline-plate {
-  position: absolute;
-  inset: 0;
-  background-image: linear-gradient(90deg, rgba(244,245,248,.2), rgba(244,245,248,.05) 55%, rgba(244,245,248,.12));
-  box-shadow: inset 0 1px 0 rgba(255,255,255,.28);
-  border-top: 2px solid #ffffff;
-  clip-path: polygon(10px 0, calc(100% - 10px) 0, 100% 10px, 100% 100%, 0 100%, 0 10px);
-}
-body .mission-shell .media-title,
-body .architecture-shell .media-title {
-  position: relative;
-  z-index: 1;
-}
-/* ---------- Flight overlay: one coordinate system across both columns ---------- */
-#flightOverlay {
-  position: fixed;
-  inset: 0;
-  z-index: 300;
-  pointer-events: none;
+  width: 1px;
+  height: 1px;
+  margin: -1px;
+  padding: 0;
   overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
 }
-.flight-positioner { position: absolute; top: 0; left: 0; will-change: transform; }
-.flight-text { position: relative; transform-origin: left top; white-space: nowrap; }
-.flight-visual { position: absolute; top: 0; left: 0; white-space: nowrap; color: #ffffff; }
-.flight-visual--source { position: relative; }
+.transfer-layer {
+  position: absolute;
+  inset: 0;
+  z-index: 6;
+  pointer-events: none;
+  overflow: visible;
+}
+.transfer-card {
+  position: absolute;
+  top: 0;
+  left: 0;
+  box-sizing: border-box;
+  overflow: hidden;
+  background-image: var(--transfer-card-fill);
+  box-shadow: inset 0 1px 0 rgba(255,255,255,.28);
+  border-top: 2px solid var(--transfer-card-border);
+  clip-path: polygon(
+    var(--transfer-card-chamfer) 0,
+    calc(100% - var(--transfer-card-chamfer)) 0,
+    100% var(--transfer-card-chamfer),
+    100% calc(100% - var(--transfer-card-chamfer)),
+    calc(100% - var(--transfer-card-chamfer)) 100%,
+    var(--transfer-card-chamfer) 100%,
+    0 calc(100% - var(--transfer-card-chamfer)),
+    0 var(--transfer-card-chamfer)
+  );
+  pointer-events: none;
+  will-change: left, top, width, height;
+}
+.transfer-card-text {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: flex-start;
+  padding: 0 18px;
+  box-sizing: border-box;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  color: var(--transfer-card-text);
+}
+.media-index-item--transferring .media-index-item-outlet,
+.media-index-item--transferring .media-index-item-title {
+  visibility: hidden;
+}
+@media (prefers-reduced-motion: reduce) {
+  .transfer-card { transition: none !important; }
+}
 
 /* ---------- 0B: architecture shell contours ---------- */
 /* Top-right corner of the large block stays square. */
@@ -3517,10 +3508,8 @@ body .architecture-workspace .media-index-item {
   border-left: none !important;
   border-right: none !important;
 }
-body .architecture-workspace .media-index-item:first-child {
-  border-top: 2px solid #ffffff !important;
-  clip-path: polygon(10px 0, calc(100% - 10px) 0, 100% 10px, 100% 100%, 0 100%, 0 10px);
-}
+/* The top rubricator card no longer doubles as the panel's own top border —
+   the unified frame supplies that; cards are free to leave the sidebar. */
 /* Active backing runs boundary to boundary. */
 body .architecture-workspace .media-index-item.is-active,
 body .mission-shell .media-index-item.is-active {
@@ -3528,9 +3517,6 @@ body .mission-shell .media-index-item.is-active {
   width: 100% !important;
   outline: none !important;
   clip-path: none;
-}
-body .architecture-workspace .media-index-item:first-child.is-active {
-  clip-path: polygon(10px 0, calc(100% - 10px) 0, 100% 10px, 100% 100%, 0 100%, 0 10px);
 }
 
 /* ---------- Social feed ---------- */
@@ -3630,7 +3616,4 @@ body .architecture-workspace .media-index-item:first-child.is-active {
   font-size: 12px;
   color: #8b8b96;
   border: 1px dashed rgba(161, 161, 170, .3);
-}
-@media (prefers-reduced-motion: reduce) {
-  .flight-positioner, .headline-reveal { transition: none !important; }
 }
