@@ -1,0 +1,380 @@
+/* Aspire UI refinement pass — applied after transfer-band-v3.css */
+:root {
+  --facet-cut: 12px;
+  --facet-stroke: rgba(255,255,255,.78);
+  --panel-bg: rgba(30,28,40,.97);
+}
+
+/* HERO */
+body .aspire-hero .hero-headline {
+  letter-spacing: .075em !important;
+  line-height: .94 !important;
+  font-weight: 650 !important;
+  margin-bottom: 16px !important;
+}
+.hero-subtitle {
+  margin: 0;
+  max-width: 46rem;
+  color: rgba(244,245,248,.82);
+  font-family: 'Montserrat', sans-serif !important;
+  font-size: clamp(13px, 1.15vw, 16px) !important;
+  font-weight: 500 !important;
+  line-height: 1.45;
+  letter-spacing: .22em;
+  text-transform: uppercase;
+}
+
+/* FACET LANGUAGE: upper corners only, with the cut explicitly stroked. */
+.transfer-card.transfer-band-v3,
+.media-shell-header,
+.section-bar,
+.roadmap-node,
+.partner-card,
+.partners-shell,
+.social-card,
+.media-index-item.is-active,
+.mission-index-item.is-active {
+  clip-path: polygon(var(--facet-cut) 0, calc(100% - var(--facet-cut)) 0, 100% var(--facet-cut), 100% 100%, 0 100%, 0 var(--facet-cut)) !important;
+}
+
+.transfer-card.transfer-band-v3,
+.media-shell-header,
+.section-bar,
+.roadmap-node,
+.partner-card,
+.partners-shell {
+  border-top: 1px solid var(--facet-stroke) !important;
+  border-left: 0 !important;
+  border-right: 0 !important;
+  border-bottom: 0 !important;
+}
+
+.transfer-card.transfer-band-v3::before,
+.transfer-card.transfer-band-v3::after,
+.media-shell-header::before,
+.media-shell-header::after,
+.section-bar::before,
+.section-bar::after,
+.roadmap-node::before,
+.roadmap-node::after,
+.partner-card::before,
+.partner-card::after,
+.partners-shell::before,
+.partners-shell::after {
+  content: "";
+  position: absolute;
+  z-index: 8;
+  width: 17px;
+  height: 1px;
+  background: var(--facet-stroke);
+  pointer-events: none;
+}
+.transfer-card.transfer-band-v3::before,
+.media-shell-header::before,
+.section-bar::before,
+.roadmap-node::before,
+.partner-card::before,
+.partners-shell::before {
+  left: 0;
+  top: 12px;
+  transform: rotate(-45deg);
+  transform-origin: left center;
+}
+.transfer-card.transfer-band-v3::after,
+.media-shell-header::after,
+.section-bar::after,
+.roadmap-node::after,
+.partner-card::after,
+.partners-shell::after {
+  right: 0;
+  top: 12px;
+  transform: rotate(45deg);
+  transform-origin: right center;
+}
+
+/* SYSTEM ARCHITECTURE section label: keep it inside its own top header. */
+body .taxonomy-section .media-shell-header {
+  position: relative !important;
+  min-height: 48px !important;
+  height: 48px !important;
+  padding: 0 18px !important;
+  margin: 0 0 4px !important;
+  display: flex !important;
+  align-items: center !important;
+  overflow: hidden !important;
+  background: rgba(29,27,39,.98) !important;
+}
+body .taxonomy-section .media-shell-header .technical-label {
+  position: relative !important;
+  z-index: 3;
+  display: inline-flex !important;
+  align-items: center !important;
+  margin: 0 !important;
+  padding: 0 !important;
+  transform: none !important;
+  line-height: 1 !important;
+  font-size: 12px !important;
+  font-weight: 700 !important;
+  letter-spacing: .22em !important;
+}
+
+/* All rubricator/transfer headings are semibold but keep the same size. */
+.transfer-band-label,
+#media-modal .media-update-rubricator .media-index-item-title,
+#mission-modal .media-update-rubricator .media-index-item-title,
+#architectureWorkspace .architecture-rubricator .media-index-item-outlet {
+  font-weight: 600 !important;
+}
+
+/* Remove the delayed drop-in effect: content is already in its final position. */
+.article-body-enter,
+#mediaText,
+#missionText,
+#oryxText,
+#mediaArticlePane,
+#missionArticlePane,
+#oryxStage .media-article-pane,
+#mediaArticlePane .media-article-visual,
+#missionArticlePane .media-article-visual,
+#oryxStage .architecture-spec-visual {
+  animation: none !important;
+  transition: none !important;
+  opacity: 1 !important;
+  transform: none !important;
+}
+
+/* Keep article scroll content below the fixed transfer band. */
+#mediaWorkspace.has-transfer-band .media-stage.has-article .media-article-pane,
+#missionWorkspace.has-transfer-band .media-stage.has-article .media-article-pane,
+#architectureWorkspace.has-transfer-band .media-stage .media-article-pane {
+  padding-top: var(--transfer-band-reserve, 64px) !important;
+}
+
+/* SYSTEM ARCHITECTURE content composition. */
+#architectureWorkspace .media-article-body {
+  padding: 18px 24px 44px !important;
+}
+.architecture-spec-layout {
+  display: grid;
+  gap: 24px;
+}
+.architecture-spec-visual {
+  min-height: 250px;
+  margin: 0 !important;
+  padding: 8px 0 2px !important;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.architecture-spec-visual img {
+  width: min(90%, 940px) !important;
+  max-height: 340px !important;
+  object-fit: contain !important;
+}
+.architecture-spec-copy {
+  display: grid;
+  grid-template-columns: minmax(0, 1.1fr) minmax(280px, .9fr);
+  gap: 24px 34px;
+  max-width: none !important;
+  align-items: start;
+}
+.architecture-spec-lead,
+.architecture-spec-kicker {
+  grid-column: 1 / -1;
+  margin: 0 !important;
+  color: #fff !important;
+  font-family: 'Montserrat', sans-serif !important;
+  font-size: 17px !important;
+  font-weight: 600 !important;
+  line-height: 1.42 !important;
+}
+.architecture-spec-group {
+  margin: 0 !important;
+  padding: 15px 16px 16px !important;
+  position: relative;
+  background: rgba(255,255,255,.035);
+  clip-path: polygon(10px 0, calc(100% - 10px) 0, 100% 10px, 100% 100%, 0 100%, 0 10px);
+  border-top: 1px solid rgba(255,255,255,.28) !important;
+}
+.architecture-spec-group::before,
+.architecture-spec-group::after {
+  content: "";
+  position: absolute;
+  z-index: 2;
+  width: 14px;
+  height: 1px;
+  background: rgba(255,255,255,.28);
+}
+.architecture-spec-group::before { left: 0; top: 10px; transform: rotate(-45deg); transform-origin: left center; }
+.architecture-spec-group::after { right: 0; top: 10px; transform: rotate(45deg); transform-origin: right center; }
+.architecture-spec-label {
+  font-weight: 700 !important;
+  letter-spacing: .14em !important;
+}
+.architecture-spec-copy p,
+.architecture-spec-list li {
+  font-size: 14px !important;
+  line-height: 1.58 !important;
+}
+.architecture-spec-list {
+  margin: 0 !important;
+  padding-left: 18px !important;
+}
+.architecture-spec-list li + li { margin-top: 8px; }
+
+/* ROADMAP: one program line, five linked milestones. */
+.project-roadmap-section { padding-top: 10px !important; }
+.section-bar {
+  position: relative;
+  min-height: 44px;
+  display: flex;
+  align-items: center;
+  padding: 0 18px;
+  margin-bottom: 16px;
+  background: rgba(23,22,31,.96);
+}
+.section-bar-label {
+  color: #fff;
+  font-family: 'Martian Mono', monospace !important;
+  font-size: 12px !important;
+  font-weight: 700 !important;
+  letter-spacing: .22em !important;
+  text-transform: uppercase;
+}
+.roadmap-constellation-shell {
+  position: relative;
+  padding: 18px 0 8px;
+}
+.roadmap-spine {
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: 47px;
+  height: 1px;
+  background: linear-gradient(90deg, transparent, rgba(255,255,255,.42) 9%, rgba(255,255,255,.42) 91%, transparent);
+}
+.roadmap-constellation-grid {
+  display: grid;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  gap: 14px;
+}
+.roadmap-node {
+  position: relative;
+  min-height: 232px;
+  padding: 17px 17px 20px;
+  background: linear-gradient(180deg, rgba(10,10,16,.93), rgba(22,20,31,.95));
+}
+.roadmap-node-year {
+  color: rgba(255,255,255,.72);
+  font-family: 'Martian Mono', monospace !important;
+  font-size: 10px !important;
+  font-weight: 700 !important;
+  letter-spacing: .16em !important;
+}
+.roadmap-node-dot {
+  position: relative;
+  z-index: 3;
+  width: 11px;
+  height: 11px;
+  margin: 9px 0 15px;
+  border-radius: 999px;
+  background: #fff;
+  box-shadow: 0 0 0 4px rgba(255,255,255,.1), 0 0 16px rgba(255,255,255,.2);
+}
+.roadmap-node-title {
+  margin: 0 0 10px;
+  color: #fff;
+  font-family: 'Montserrat', sans-serif !important;
+  font-size: 16px !important;
+  font-weight: 600 !important;
+  line-height: 1.2;
+  letter-spacing: .02em;
+}
+.roadmap-node-copy {
+  margin: 0;
+  color: rgba(244,245,248,.76);
+  font-family: 'Montserrat', sans-serif !important;
+  font-size: 12.5px !important;
+  line-height: 1.55;
+}
+
+/* PARTNERS */
+.partners-section {
+  position: relative;
+  z-index: 10;
+  padding: 14px var(--site-gutter, 24px) 34px;
+}
+.partners-shell {
+  position: relative;
+  max-width: 1536px;
+  margin: 0 auto;
+  padding: 18px;
+  background: linear-gradient(180deg, rgba(18,17,27,.95), rgba(26,24,36,.96));
+}
+.partners-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 14px;
+}
+.partner-card {
+  position: relative;
+  min-height: 210px;
+  padding: 18px;
+  display: flex;
+  flex-direction: column;
+  background: rgba(255,255,255,.03);
+}
+.partner-card-eyebrow {
+  margin-bottom: 18px;
+  color: rgba(255,255,255,.62);
+  font-family: 'Martian Mono', monospace !important;
+  font-size: 10px !important;
+  font-weight: 700 !important;
+  letter-spacing: .14em !important;
+  text-transform: uppercase;
+}
+.partner-card-title {
+  margin: 0 0 12px;
+  color: #fff;
+  font-family: 'Montserrat', sans-serif !important;
+  font-size: 23px !important;
+  font-weight: 600 !important;
+  line-height: 1.12;
+}
+.partner-card-copy {
+  margin: 0 0 16px;
+  color: rgba(244,245,248,.8);
+  font-family: 'Montserrat', sans-serif !important;
+  font-size: 14px !important;
+  line-height: 1.58;
+  flex: 1;
+}
+.partner-card-link {
+  color: #fff;
+  font-family: 'Martian Mono', monospace !important;
+  font-size: 10px !important;
+  font-weight: 700 !important;
+  letter-spacing: .12em !important;
+  text-transform: uppercase;
+  text-decoration: none;
+}
+.partner-card-link:hover { text-decoration: underline; }
+
+@media (max-width: 1040px) {
+  .roadmap-constellation-grid,
+  .partners-grid,
+  .architecture-spec-copy {
+    grid-template-columns: 1fr;
+  }
+  .roadmap-spine { display: none; }
+}
+
+@media (max-width: 680px) {
+  body .aspire-hero .hero-headline { letter-spacing: .055em !important; }
+  .hero-subtitle { letter-spacing: .14em; }
+  .architecture-spec-visual { min-height: 170px; }
+  .architecture-spec-visual img { width: 100% !important; max-height: 210px !important; }
+  .partners-section { padding-inline: 8px; }
+}
+
+.partner-card-link--static { opacity: .58; text-decoration: none !important; cursor: default; }
