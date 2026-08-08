@@ -94,9 +94,14 @@
         };
 
         /* Geometry for one card: where it starts (the clicked row) and where it
-           docks (a full-width band at the top of the frame, its label aligned to
-           the left edge of the article/spec text column). Measured fresh every
-           call — nothing here is hardcoded per item or per index. */
+           docks. On the desktop/tablet side-by-side layout the rubricator and
+           the stage share the same top edge, so a full-width band at the top
+           of the frame reads as both at once. On the stacked mobile layout
+           they no longer share that edge — the rubricator sits above the
+           stage — so the band docks at the top of the stage instead, landing
+           directly above the article photo rather than over the list.
+           Measured fresh every call — nothing here is hardcoded per item or
+           per index. */
         TransferCardController.prototype._measureBand = function (row) {
             if (!this.frame || !row) return null;
 
@@ -107,6 +112,10 @@
             const labelRect = labelNode.getBoundingClientRect();
             const topInset = px(frameCS.paddingTop);
 
+            const stage = this.frame.querySelector('.media-stage');
+            const stageRect = stage ? stage.getBoundingClientRect() : frameRect;
+            const dockY = TransferCardController.stackedLayout() ? (stageRect.top - frameRect.top) : topInset;
+
             const scroll = this.frame.querySelector('.media-article-scroll');
             const body = this.frame.querySelector('.media-article-body');
             let labelX;
@@ -116,8 +125,6 @@
                 const bodyCS = body ? getComputedStyle(body) : null;
                 labelX = scrollRect.left - frameRect.left + px(scrollCS.paddingLeft) + (bodyCS ? px(bodyCS.paddingLeft) : 0);
             } else {
-                const stage = this.frame.querySelector('.media-stage');
-                const stageRect = stage ? stage.getBoundingClientRect() : frameRect;
                 labelX = stageRect.left - frameRect.left + 18;
             }
 
@@ -132,7 +139,7 @@
                     labelWidth: labelRect.width,
                     labelHeight: labelRect.height
                 },
-                dock: { x: 0, y: topInset, width: frameRect.width, labelX: labelX }
+                dock: { x: 0, y: dockY, width: frameRect.width, labelX: labelX }
             };
         };
 
@@ -216,7 +223,14 @@
             const start = before.start;
             const dock = after.dock;
 
-            row.classList.add('media-index-item--transferring');
+            /* On the stacked mobile layout the band docks above the stage, not
+               over the list (see _measureBand) — the row stays fully readable
+               there, so blanking its text would just look like it vanished.
+               .is-active (toggled by prepareContent) is the selection signal
+               on mobile instead. */
+            if (!TransferCardController.stackedLayout()) {
+                row.classList.add('media-index-item--transferring');
+            }
 
             const card = this._ensureCard();
             const label = this.bandLabel;
