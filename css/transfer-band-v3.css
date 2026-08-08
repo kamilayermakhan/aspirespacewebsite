@@ -1,6 +1,11 @@
 /* Aspire Transfer Band correction.
-   One faceted translucent band spans the complete shared workspace. */
+   Sticky full-width faceted band shared by Updates, Mission and System Architecture. */
 
+:root {
+  --transfer-band-gap: 10px;
+}
+
+/* Facets are allowed only on upper corners. No lower chamfers. */
 .transfer-card.transfer-band-v3 {
   overflow: hidden !important;
   background-image: linear-gradient(90deg, rgba(244,245,248,.20), rgba(244,245,248,.05) 55%, rgba(244,245,248,.12)) !important;
@@ -10,10 +15,8 @@
     var(--transfer-card-chamfer, 10px) 0,
     calc(100% - var(--transfer-card-chamfer, 10px)) 0,
     100% var(--transfer-card-chamfer, 10px),
-    100% calc(100% - var(--transfer-card-chamfer, 10px)),
-    calc(100% - var(--transfer-card-chamfer, 10px)) 100%,
-    var(--transfer-card-chamfer, 10px) 100%,
-    0 calc(100% - var(--transfer-card-chamfer, 10px)),
+    100% 100%,
+    0 100%,
     0 var(--transfer-card-chamfer, 10px)
   ) !important;
   will-change: left, top, width !important;
@@ -30,13 +33,23 @@
   will-change: left;
 }
 
-/* The band must visually bridge the left index and the right content region;
-   the internal divider stays below it instead of cutting the plate in two. */
 #architectureWorkspace > .transfer-layer,
 #missionWorkspace > .transfer-layer,
 #mediaWorkspace > .transfer-layer {
-  z-index: 12 !important;
+  z-index: 20 !important;
   overflow: visible !important;
+}
+
+/* The source row remains as a structural placeholder during transfer, but its
+   short backing is completely removed so only one translucent band is visible. */
+.media-index-item--transferring {
+  background: transparent !important;
+  background-image: none !important;
+  border-top-color: transparent !important;
+  border-bottom-color: transparent !important;
+  box-shadow: none !important;
+  outline: none !important;
+  clip-path: none !important;
 }
 
 .media-index-item--transferring .media-index-item-outlet,
@@ -45,16 +58,88 @@
   visibility: hidden !important;
 }
 
-/* Updates = title-driven interactive catalogue, not an outlet list. */
-#media-modal .media-index-pane {
+/* The band is outside the scroll container. Reserve real space above the
+   right-hand scroll viewport so article text never travels behind it. */
+#mediaWorkspace.has-transfer-band .media-stage.has-article .media-article-pane,
+#missionWorkspace.has-transfer-band .media-stage.has-article .media-article-pane,
+#architectureWorkspace.has-transfer-band .media-stage .media-article-pane {
+  box-sizing: border-box !important;
+  padding-top: var(--transfer-band-reserve, 64px) !important;
+}
+
+#mediaWorkspace.has-transfer-band .media-article-scroll,
+#missionWorkspace.has-transfer-band .media-article-scroll,
+#architectureWorkspace.has-transfer-band .media-article-scroll {
+  min-height: 0 !important;
+  height: 100% !important;
+  padding-top: 0 !important;
+}
+
+/* Destination rails stay available for accessibility/state only and no longer
+   consume scrolling space. Geometry comes from the shared stage instead. */
+#mediaWorkspace .media-article-header,
+#missionWorkspace .media-article-header,
+#architectureWorkspace .media-article-header {
+  position: absolute !important;
+  width: 1px !important;
+  height: 1px !important;
+  min-height: 0 !important;
+  margin: 0 !important;
+  padding: 0 !important;
+  overflow: hidden !important;
+  border: 0 !important;
+  pointer-events: none !important;
+}
+
+#mediaWorkspace .transfer-rail,
+#missionWorkspace .transfer-rail,
+#architectureWorkspace .transfer-rail {
+  width: 1px !important;
+  height: 1px !important;
+  min-height: 0 !important;
+  padding: 0 !important;
+  margin: 0 !important;
+}
+
+/* Whole-site facet correction: bottom edges stay square. */
+.media-shell {
+  clip-path: polygon(14px 0, 100% 0, 100% 100%, 0 100%, 0 14px) !important;
+}
+
+body .architecture-shell.media-shell {
+  clip-path: polygon(14px 0, 100% 0, 100% 100%, 0 100%, 0 14px) !important;
+}
+
+.roadmap-card {
+  clip-path: polygon(12px 0, 100% 0, 100% 100%, 0 100%, 0 12px) !important;
+}
+
+.media-index-item.is-active,
+.mission-index-item.is-active {
+  clip-path: polygon(10px 0, calc(100% - 10px) 0, 100% 10px, 100% 100%, 0 100%, 0 10px) !important;
+}
+
+.social-card {
+  clip-path: polygon(10px 0, calc(100% - 10px) 0, 100% 10px, 100% 100%, 0 100%, 0 10px) !important;
+}
+
+/* ---------- Shared rubricator appearance ---------- */
+#media-modal .media-index-pane,
+#mission-modal .media-index-pane {
   overflow: hidden !important;
 }
 
-#media-modal #mediaList {
+#media-modal #mediaList,
+#mission-modal #missionList,
+#architectureWorkspace #oryxList {
   display: flex !important;
   flex-direction: column !important;
   gap: 0 !important;
-  overflow: visible !important;
+  overflow-x: hidden !important;
+}
+
+#media-modal #mediaList {
+  overflow-y: visible !important;
   will-change: transform;
 }
 
@@ -62,7 +147,9 @@
   pointer-events: auto;
 }
 
-#media-modal .media-update-rubricator {
+#media-modal .media-update-rubricator,
+#mission-modal .media-update-rubricator,
+#architectureWorkspace .architecture-rubricator {
   position: relative;
   flex: 0 0 auto;
   width: 100% !important;
@@ -73,7 +160,9 @@
   text-align: left !important;
 }
 
-#media-modal .media-update-rubricator .media-index-item-title {
+#media-modal .media-update-rubricator .media-index-item-title,
+#mission-modal .media-update-rubricator .media-index-item-title,
+#architectureWorkspace .architecture-rubricator .media-index-item-outlet {
   display: block;
   width: 100%;
   min-width: 0;
@@ -90,11 +179,17 @@
 }
 
 #media-modal .media-update-rubricator.is-active .media-index-item-title,
-#media-modal .media-update-rubricator:hover .media-index-item-title {
+#media-modal .media-update-rubricator:hover .media-index-item-title,
+#mission-modal .media-update-rubricator.is-active .media-index-item-title,
+#mission-modal .media-update-rubricator:hover .media-index-item-title,
+#architectureWorkspace .architecture-rubricator.is-active .media-index-item-outlet,
+#architectureWorkspace .architecture-rubricator:hover .media-index-item-outlet {
   color: #fff !important;
 }
 
-#media-modal .media-update-rubricator .media-index-item-arrow {
+#media-modal .media-update-rubricator .media-index-item-arrow,
+#mission-modal .media-update-rubricator .media-index-item-arrow,
+#architectureWorkspace .architecture-rubricator .media-index-item-arrow {
   position: absolute;
   right: 14px;
   top: 14px;
@@ -104,13 +199,129 @@
   letter-spacing: .06em !important;
 }
 
+/* ---------- System Architecture content ---------- */
+#architectureWorkspace .media-stage {
+  background: #1e1c28 !important;
+}
+
+#architectureWorkspace .media-article-body {
+  max-width: none !important;
+  padding: 16px 24px 44px !important;
+}
+
+#architectureWorkspace #oryxVisual {
+  display: none !important;
+}
+
+.architecture-spec-layout {
+  width: 100%;
+  max-width: none;
+}
+
+.architecture-spec-visual {
+  width: 100%;
+  margin: 0 0 26px !important;
+  padding: 0 !important;
+  overflow: hidden;
+  border: 0 !important;
+  background: transparent !important;
+}
+
+.architecture-spec-visual img {
+  display: block;
+  width: 100%;
+  max-height: 235px;
+  object-fit: contain;
+  object-position: center;
+  background: transparent !important;
+}
+
+.architecture-spec-copy {
+  max-width: 900px;
+  color: #d4d4d8;
+  font-family: 'Montserrat', sans-serif;
+  font-size: 15px;
+  line-height: 1.55;
+}
+
+.architecture-spec-copy p {
+  margin: 0 0 12px;
+}
+
+.architecture-spec-lead {
+  margin-bottom: 24px !important;
+  color: #f4f5f8;
+  font-size: 17px !important;
+  line-height: 1.4 !important;
+}
+
+.architecture-spec-kicker {
+  font-weight: 600 !important;
+  letter-spacing: .015em;
+}
+
+.architecture-spec-group {
+  margin: 22px 0 26px;
+  padding-top: 14px;
+  border-top: 1px solid rgba(228,230,238,.26);
+}
+
+.architecture-spec-label {
+  margin-bottom: 10px;
+  color: #f4f5f8;
+  font-family: 'Martian Mono', monospace !important;
+  font-size: 10px !important;
+  font-weight: 500 !important;
+  letter-spacing: .12em;
+  text-transform: uppercase;
+}
+
+.architecture-spec-list {
+  margin: 14px 0 0 18px;
+  padding: 0;
+}
+
+.architecture-spec-list li {
+  margin: 8px 0;
+  padding-left: 3px;
+  color: #d4d4d8;
+  font-family: 'Montserrat', sans-serif !important;
+  font-size: 15px !important;
+  line-height: 1.5;
+}
+
+@media (max-width: 900px) {
+  .architecture-spec-visual img {
+    max-height: 190px;
+  }
+}
+
 @media (max-width: 680px) {
-  #media-modal .media-update-rubricator {
+  #media-modal .media-update-rubricator,
+  #mission-modal .media-update-rubricator,
+  #architectureWorkspace .architecture-rubricator {
     min-height: 52px;
     padding: 11px 34px 11px 13px !important;
   }
-  #media-modal .media-update-rubricator .media-index-item-title {
+
+  #media-modal .media-update-rubricator .media-index-item-title,
+  #mission-modal .media-update-rubricator .media-index-item-title,
+  #architectureWorkspace .architecture-rubricator .media-index-item-outlet {
     font-size: 12px !important;
+  }
+
+  #mediaWorkspace.has-transfer-band .media-stage.has-article .media-article-pane,
+  #missionWorkspace.has-transfer-band .media-stage.has-article .media-article-pane,
+  #architectureWorkspace.has-transfer-band .media-stage .media-article-pane {
+    padding-top: var(--transfer-band-reserve, 58px) !important;
+  }
+
+  #architectureWorkspace .media-article-body {
+    padding: 14px 15px 36px !important;
+  }
+
+  .architecture-spec-visual img {
+    max-height: 150px;
   }
 }
 
