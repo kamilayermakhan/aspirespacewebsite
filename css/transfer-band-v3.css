@@ -1,0 +1,124 @@
+/* Aspire Transfer Band correction.
+   One faceted translucent band spans the complete shared workspace. */
+
+.transfer-card.transfer-band-v3 {
+  overflow: hidden !important;
+  background-image: linear-gradient(90deg, rgba(244,245,248,.20), rgba(244,245,248,.05) 55%, rgba(244,245,248,.12)) !important;
+  border-top: 2px solid #fff !important;
+  box-shadow: inset 0 1px 0 rgba(255,255,255,.28), 0 0 10px rgba(244,245,248,.12) !important;
+  clip-path: polygon(
+    var(--transfer-card-chamfer, 10px) 0,
+    calc(100% - var(--transfer-card-chamfer, 10px)) 0,
+    100% var(--transfer-card-chamfer, 10px),
+    100% calc(100% - var(--transfer-card-chamfer, 10px)),
+    calc(100% - var(--transfer-card-chamfer, 10px)) 100%,
+    var(--transfer-card-chamfer, 10px) 100%,
+    0 calc(100% - var(--transfer-card-chamfer, 10px)),
+    0 var(--transfer-card-chamfer, 10px)
+  ) !important;
+  will-change: left, top, width !important;
+}
+
+.transfer-band-label {
+  position: absolute;
+  display: block;
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+  overflow: hidden;
+  pointer-events: none;
+  will-change: left;
+}
+
+/* The band must visually bridge the left index and the right content region;
+   the internal divider stays below it instead of cutting the plate in two. */
+#architectureWorkspace > .transfer-layer,
+#missionWorkspace > .transfer-layer,
+#mediaWorkspace > .transfer-layer {
+  z-index: 12 !important;
+  overflow: visible !important;
+}
+
+.media-index-item--transferring .media-index-item-outlet,
+.media-index-item--transferring .media-index-item-title,
+.media-index-item--transferring .media-index-item-arrow {
+  visibility: hidden !important;
+}
+
+/* Updates = title-driven interactive catalogue, not an outlet list. */
+#media-modal .media-index-pane {
+  overflow: hidden !important;
+}
+
+#media-modal #mediaList {
+  display: flex !important;
+  flex-direction: column !important;
+  gap: 0 !important;
+  overflow: visible !important;
+  will-change: transform;
+}
+
+#media-modal #mediaList.is-rolling {
+  pointer-events: auto;
+}
+
+#media-modal .media-update-rubricator {
+  position: relative;
+  flex: 0 0 auto;
+  width: 100% !important;
+  min-height: 58px;
+  height: auto !important;
+  padding: 13px 38px 13px 16px !important;
+  align-items: flex-start !important;
+  text-align: left !important;
+}
+
+#media-modal .media-update-rubricator .media-index-item-title {
+  display: block;
+  width: 100%;
+  min-width: 0;
+  white-space: normal !important;
+  overflow: visible !important;
+  text-overflow: clip !important;
+  font-family: 'Montserrat', sans-serif !important;
+  font-size: 12.5px !important;
+  font-weight: 500 !important;
+  line-height: 1.28 !important;
+  letter-spacing: .015em !important;
+  text-transform: none !important;
+  color: #d4d4d8 !important;
+}
+
+#media-modal .media-update-rubricator.is-active .media-index-item-title,
+#media-modal .media-update-rubricator:hover .media-index-item-title {
+  color: #fff !important;
+}
+
+#media-modal .media-update-rubricator .media-index-item-arrow {
+  position: absolute;
+  right: 14px;
+  top: 14px;
+}
+
+#media-modal .media-article p.media-article-dateline {
+  letter-spacing: .06em !important;
+}
+
+@media (max-width: 680px) {
+  #media-modal .media-update-rubricator {
+    min-height: 52px;
+    padding: 11px 34px 11px 13px !important;
+  }
+  #media-modal .media-update-rubricator .media-index-item-title {
+    font-size: 12px !important;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  #media-modal #mediaList,
+  .transfer-card.transfer-band-v3,
+  .transfer-band-label {
+    animation: none !important;
+    transition: none !important;
+  }
+}
