@@ -1,4 +1,4 @@
-/* Aspire refinement pass v8 — stable master/detail state and instant media swap. */
+/* Aspire refinement pass v9 — radio-style Mission/Updates transfer state. */
 (function () {
   'use strict';
 
@@ -14,12 +14,41 @@
     return Number.isFinite(n) ? n : 0;
   };
 
-  /* The recording exposed two remaining issues:
-     1) Updates still used the old cyclic catalogue, so rows were physically
-        moved instead of leaving empty source slots in their original positions.
-     2) image loading still started too late for rapid successive clicks.
+  /* Mission + Updates are true master/detail lists:
+     - only the CURRENT source row is visually empty while its title is docked;
+     - when another item is selected, the previous source title returns to its
+       original row before the new title begins its transfer;
+     - no persistent evacuated source slots. */
+  const installRadioSourceState = controller => {
+    if (!controller) return;
 
-     This pass owns Updates selection in capture phase and leaves DOM order fixed. */
+    controller._restorePreviousLabel = function () {
+      const row = this.sourceLabel;
+      if (!row) return;
+
+      row.classList.remove('media-index-item--transferring');
+      row.classList.remove('media-index-item--evacuated');
+      if (this.evacuatedRows && typeof this.evacuatedRows.delete === 'function') {
+        this.evacuatedRows.delete(row);
+      }
+      this.sourceLabel = null;
+    };
+
+    /* Clear stale v7/v8 state left in the current DOM before the user starts a
+       new interaction. This does not alter layout/order. */
+    controller.frame?.querySelectorAll('.media-index-item--evacuated').forEach(row => {
+      row.classList.remove('media-index-item--evacuated');
+    });
+    if (controller.evacuatedRows && typeof controller.evacuatedRows.clear === 'function') {
+      controller.evacuatedRows.clear();
+    }
+  };
+
+  if (typeof missionTransfer !== 'undefined') installRadioSourceState(missionTransfer);
+  if (typeof mediaTransfer !== 'undefined') installRadioSourceState(mediaTransfer);
+
+  /* Keep the Architecture controller untouched here. Its behavior is managed
+     independently by the architecture refinement layer. */
 
   if (typeof TransferCardController !== 'undefined') {
     const proto = TransferCardController.prototype;
@@ -67,9 +96,7 @@
       : '');
   };
 
-  /* Eager, non-blocking preload deck. The images are loaded from the moment the
-     page is ready instead of waiting for hover/click. They are kept in the DOM
-     at 1×1px so the browser has a strong reason to fetch and decode them. */
+  /* Eager, non-blocking preload deck. */
   const preloadDeck = document.createElement('div');
   preloadDeck.id = 'aspire-media-preload-deck';
   preloadDeck.setAttribute('aria-hidden', 'true');
@@ -159,8 +186,6 @@
       else mediaHeroImage.removeAttribute('src');
     }
 
-    /* Ambient copy is intentionally disabled by CSS; don't spend time swapping
-       a second image source on every click. */
     mediaHeroAmbient?.removeAttribute('src');
 
     mediaText.innerHTML = item.articleHtml ||
@@ -192,8 +217,9 @@
     const button = mediaList.querySelector(`button[data-media-index="${index}"]`);
     if (!item || !button || typeof mediaTransfer === 'undefined') return;
 
-    /* No row rotation. The catalogue order is immutable; every transferred row
-       keeps exactly its original height/location and becomes an empty source slot. */
+    /* mediaTransfer.transferTo() first restores the previous source row through
+       the instance-level radio-state hook above, then hides/transfers the newly
+       selected row. Thus exactly one source position is empty at a time. */
     mediaTransfer.transferTo(
       button,
       index,
@@ -209,7 +235,6 @@
       const button = event.target.closest('button[data-media-index]');
       if (!button || !mediaList.contains(button)) return;
 
-      /* Capture happens before the legacy cyclic click listener. */
       event.preventDefault();
       event.stopImmediatePropagation();
       const index = Number(button.dataset.mediaIndex);
@@ -219,16 +244,27 @@
 
   window.showMediaArticle = selectStableUpdate;
 
-  /* The current selected source should remain blank as well, not only the
-     previously selected rows. Ensure the source-class itself never paints text. */
   const style = document.createElement('style');
-  style.id = 'aspire-refinement-v8-style';
+  style.id = 'aspire-refinement-v9-style';
   style.textContent = `
-    .media-index-item--transferring .media-index-item-title,
-    .media-index-item--transferring .media-index-item-outlet,
-    .media-index-item--transferring .media-index-item-arrow,
-    .media-index-item--transferring .taxonomy-index-name {
+    /* Only the currently transferred source row is blank. Previous rows are
+       restored by JS before the new transfer begins. */
+    #missionWorkspace .media-index-item--transferring .media-index-item-title,
+    #missionWorkspace .media-index-item--transferring .media-index-item-outlet,
+    #missionWorkspace .media-index-item--transferring .media-index-item-arrow,
+    #mediaWorkspace .media-index-item--transferring .media-index-item-title,
+    #mediaWorkspace .media-index-item--transferring .media-index-item-outlet,
+    #mediaWorkspace .media-index-item--transferring .media-index-item-arrow {
       visibility: hidden !important;
+    }
+
+    #missionWorkspace .media-index-item--evacuated .media-index-item-title,
+    #missionWorkspace .media-index-item--evacuated .media-index-item-outlet,
+    #missionWorkspace .media-index-item--evacuated .media-index-item-arrow,
+    #mediaWorkspace .media-index-item--evacuated .media-index-item-title,
+    #mediaWorkspace .media-index-item--evacuated .media-index-item-outlet,
+    #mediaWorkspace .media-index-item--evacuated .media-index-item-arrow {
+      visibility: visible !important;
     }
 
     #mediaArticlePane .media-article-visual {
