@@ -1,6 +1,5 @@
-/* Aspire interaction correction — full-width Transfer Band + Updates catalogue.
- * Loaded after script.js so it deliberately replaces only the interaction layer
- * introduced by TransferCardController, leaving the site's data/content intact.
+/* Aspire interaction correction — sticky full-width Transfer Band, title-based
+ * Updates catalogue, and System Architecture content. Loaded after script.js.
  */
 (function () {
   'use strict';
@@ -11,6 +10,13 @@
     const n = parseFloat(value);
     return Number.isFinite(n) ? n : 0;
   };
+
+  const escapeHTML = value => String(value ?? '')
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#039;');
 
   const sourceLabelFor = row =>
     row && (row.querySelector('.media-index-item-title, .media-index-item-outlet') || row);
@@ -29,8 +35,6 @@
     el.style.textOverflow = cs.textOverflow;
   };
 
-  /* One label only. There is no source/target text pair and therefore no
-     typography morph or crossfade. */
   TransferCardController.prototype._ensureCard = function () {
     if (this.card && this.card.classList.contains('transfer-band-v3')) return this.card;
 
@@ -54,21 +58,30 @@
     return card;
   };
 
+  TransferCardController.prototype._restorePreviousLabel = function () {
+    if (this.sourceLabel) {
+      this.sourceLabel.classList.remove('media-index-item--transferring');
+      this.sourceLabel = null;
+    }
+  };
+
   TransferCardController.prototype._measureBand = function (row) {
-    if (!this.frame || !this.rail || !row) return null;
+    if (!this.frame || !row) return null;
 
     const frameRect = this.frame.getBoundingClientRect();
+    const frameCS = getComputedStyle(this.frame);
     const rowRect = row.getBoundingClientRect();
     const labelNode = sourceLabelFor(row);
     const labelRect = labelNode.getBoundingClientRect();
-    const railRect = this.rail.getBoundingClientRect();
-    const railCS = getComputedStyle(this.rail);
+    const stage = this.frame.querySelector('.media-stage');
+    const stageRect = stage ? stage.getBoundingClientRect() : frameRect;
+
+    const topInset = px(frameCS.paddingTop);
+    const targetInset = 18;
 
     return {
       frameRect,
-      rowRect,
       labelNode,
-      labelRect,
       start: {
         x: rowRect.left - frameRect.left,
         y: rowRect.top - frameRect.top,
@@ -81,16 +94,24 @@
       },
       dock: {
         x: 0,
-        y: railRect.top - frameRect.top,
+        y: topInset,
         width: frameRect.width,
-        labelX: railRect.left - frameRect.left + px(railCS.paddingLeft)
+        labelX: stageRect.left - frameRect.left + targetInset
       }
     };
+  };
+
+  TransferCardController.prototype._reserveBandSpace = function (height) {
+    if (!this.frame) return;
+    const reserve = Math.ceil(height + 10);
+    this.frame.style.setProperty('--transfer-band-reserve', reserve + 'px');
+    this.frame.classList.add('has-transfer-band');
   };
 
   TransferCardController.prototype._placeDockedBand = function (row, text) {
     const m = this._measureBand(row);
     if (!m) return;
+
     const card = this._ensureCard();
     const label = this.bandLabel;
 
@@ -105,25 +126,35 @@
     copySourceTypography(label, m.labelNode);
     label.style.left = m.dock.labelX + 'px';
     label.style.top = m.start.labelY + 'px';
-    label.style.width = m.start.labelWidth + 'px';
-    label.style.height = m.start.labelHeight + 'px';
+    label.style.width = Math.max(m.start.labelWidth, 1) + 'px';
+    label.style.height = Math.max(m.start.labelHeight, 1) + 'px';
     label.style.opacity = '1';
+
+    this._reserveBandSpace(m.start.height);
   };
 
   TransferCardController.prototype.resync = function () {
-    if (this.dockedIndex === null || !this.dockedRow || !this.frame || !this.rail) return;
+    if (this.dockedIndex === null || !this.dockedRow || !this.frame) return;
     this._cancelActive();
     const labelNode = sourceLabelFor(this.dockedRow);
     const text = labelNode ? labelNode.textContent.trim() : '';
     this._placeDockedBand(this.dockedRow, text);
   };
 
-  /* Final interaction model:
-     A -> B: the source card rises vertically without changing shape/text.
-     B -> C: the single faceted backing grows into one full-width band while
-             the SAME label slides horizontally to the right-side heading rail.
-     Font family, size, weight, tracking, line-height and label box are copied
-     from the source and never morph. */
+  TransferCardController.prototype.reset = function () {
+    this._cancelActive();
+    this._restorePreviousLabel();
+    this.dockedIndex = null;
+    this.dockedRow = null;
+    if (this.card) this.card.style.display = 'none';
+    if (this.frame) {
+      this.frame.classList.remove('has-transfer-band');
+      this.frame.style.removeProperty('--transfer-band-reserve');
+    }
+  };
+
+  /* One object, one label, one font. A→B is vertical only. B→C expands the
+     backing into a full-width band while the same label moves horizontally. */
   TransferCardController.prototype.transferTo = function (
     row,
     index,
@@ -132,18 +163,20 @@
     prepareContent,
     immediate
   ) {
-    if (!this.frame || !this.rail || !row) return;
-
-    const sourceRowRect = row.getBoundingClientRect();
-    const sourceLabel = sourceLabelFor(row);
-    const sourceLabelRect = sourceLabel.getBoundingClientRect();
-    const sourceCS = getComputedStyle(sourceLabel);
+    if (!this.frame || !row) return;
 
     this._cancelActive();
+    this._restorePreviousLabel();
+
+    /* Restoring the previous source can reflow the list, so measure only after
+       the restore. */
+    const sourceLabel = sourceLabelFor(row);
+    const sourceCS = getComputedStyle(sourceLabel);
+    const before = this._measureBand(row);
+    if (!before) return;
+
     const token = this.generation;
 
-    this._restorePreviousLabel();
-    row.classList.add('media-index-item--transferring');
     this.sourceLabel = row;
     this.dockedIndex = index;
     this.dockedRow = row;
@@ -151,30 +184,17 @@
     if (typeof prepareContent === 'function') prepareContent();
     if (this.railLive) this.railLive.textContent = sourceText;
 
-    const frameRect = this.frame.getBoundingClientRect();
-    const railRect = this.rail.getBoundingClientRect();
-    const railCS = getComputedStyle(this.rail);
+    /* Content may have changed the stage geometry; recompute the destination
+       while retaining the exact source-row dimensions and typography. */
+    const after = this._measureBand(row) || before;
+    const start = before.start;
+    const dock = after.dock;
 
-    const start = {
-      x: sourceRowRect.left - frameRect.left,
-      y: sourceRowRect.top - frameRect.top,
-      width: sourceRowRect.width,
-      height: sourceRowRect.height,
-      labelX: sourceLabelRect.left - sourceRowRect.left,
-      labelY: sourceLabelRect.top - sourceRowRect.top,
-      labelWidth: sourceLabelRect.width,
-      labelHeight: sourceLabelRect.height
-    };
-
-    const dock = {
-      x: 0,
-      y: railRect.top - frameRect.top,
-      width: frameRect.width,
-      labelX: railRect.left - frameRect.left + px(railCS.paddingLeft)
-    };
+    row.classList.add('media-index-item--transferring');
 
     const card = this._ensureCard();
     const label = this.bandLabel;
+
     card.style.display = '';
     card.style.transform = '';
     card.style.left = start.x + 'px';
@@ -185,8 +205,8 @@
     label.textContent = sourceText;
     label.style.left = start.labelX + 'px';
     label.style.top = start.labelY + 'px';
-    label.style.width = start.labelWidth + 'px';
-    label.style.height = start.labelHeight + 'px';
+    label.style.width = Math.max(start.labelWidth, 1) + 'px';
+    label.style.height = Math.max(start.labelHeight, 1) + 'px';
     label.style.opacity = '1';
     label.style.fontFamily = sourceCS.fontFamily;
     label.style.fontWeight = sourceCS.fontWeight;
@@ -208,9 +228,10 @@
       card.style.height = start.height + 'px';
       label.style.left = dock.labelX + 'px';
       label.style.top = start.labelY + 'px';
-      label.style.width = start.labelWidth + 'px';
-      label.style.height = start.labelHeight + 'px';
+      label.style.width = Math.max(start.labelWidth, 1) + 'px';
+      label.style.height = Math.max(start.labelHeight, 1) + 'px';
       label.style.opacity = '1';
+      this._reserveBandSpace(start.height);
       this.animations = [];
       this.timers = [];
     };
@@ -238,6 +259,7 @@
 
     const phase1Timer = setTimeout(() => {
       if (token !== this.generation) return;
+
       card.style.top = dock.y + 'px';
       card.style.transform = '';
       try { vAnim.cancel(); } catch (err) {}
@@ -267,11 +289,13 @@
       );
 
       this.animations = [bandAnim, labelAnim];
+
       const phase2Timer = setTimeout(() => {
         if (token !== this.generation) return;
         try { bandAnim.cancel(); labelAnim.cancel(); } catch (err) {}
         finish();
       }, TransferCardController.H_DURATION);
+
       this.timers = [phase2Timer];
     }, vDuration);
 
@@ -289,9 +313,7 @@
     if (controller.dockedRow) controller.resync();
   });
 
-  /* UPDATES: article titles become rubricator headings. The source/outlet moves
-     into the article metadata line after date + geography. The index behaves as
-     a cyclic card catalogue. */
+  /* ---------- UPDATES: title rubricator + cyclic catalogue ---------- */
   const mediaList = document.getElementById('mediaList');
   const mediaStage = document.getElementById('mediaStage');
   const mediaIdle = document.getElementById('mediaIdle');
@@ -303,18 +325,9 @@
   const mediaHeroFallback = document.getElementById('mediaHeroFallback');
   const mediaText = document.getElementById('mediaText');
 
-  if (!mediaList || !Array.isArray(MEDIA_RELEASES)) return;
-
   let catalogueAnim = null;
   let catalogueTimer = null;
   let catalogueGeneration = 0;
-
-  const escapeHTML = value => String(value ?? '')
-    .replace(/&/g, '&amp;')
-    .replace(/</g, '&lt;')
-    .replace(/>/g, '&gt;')
-    .replace(/"/g, '&quot;')
-    .replace(/'/g, '&#039;');
 
   const cancelCatalogueMotion = () => {
     catalogueGeneration++;
@@ -324,11 +337,14 @@
       try { catalogueAnim.cancel(); } catch (err) {}
     }
     catalogueAnim = null;
-    mediaList.style.transform = '';
-    mediaList.classList.remove('is-rolling');
+    if (mediaList) {
+      mediaList.style.transform = '';
+      mediaList.classList.remove('is-rolling');
+    }
   };
 
   const setSelectedUpdate = index => {
+    if (!mediaList) return;
     mediaList.querySelectorAll('button[data-media-index]').forEach(button => {
       const selected = Number(button.dataset.mediaIndex) === index;
       button.classList.toggle('is-active', selected);
@@ -337,7 +353,9 @@
   };
 
   const renderCatalogue = () => {
+    if (!mediaList || !Array.isArray(MEDIA_RELEASES)) return;
     mediaList.innerHTML = '';
+
     MEDIA_RELEASES.forEach((item, index) => {
       const button = document.createElement('button');
       button.type = 'button';
@@ -357,29 +375,35 @@
   };
 
   const showUpdateContent = index => {
+    if (!Array.isArray(MEDIA_RELEASES)) return;
     const item = MEDIA_RELEASES[index];
-    if (!item) return;
+    if (!item || !mediaStage || !mediaArticlePane || !mediaText) return;
 
     setSelectedUpdate(index);
     mediaStage.classList.add('has-article');
-    mediaIdle.classList.add('hidden');
+    mediaIdle?.classList.add('hidden');
     mediaArticlePane.classList.remove('hidden');
-    mediaTitle.textContent = item.title;
+    if (mediaTitle) mediaTitle.textContent = item.title;
 
     const imageUrl = item.imageData ||
       `https://drive.google.com/thumbnail?id=${encodeURIComponent(item.fileId)}&sz=w1800`;
 
-    mediaHeroFallback.textContent = item.outlet;
-    mediaHeroFallback.classList.remove('hidden');
-    mediaHeroImage.alt = `${item.outlet}: ${item.title}`;
-    mediaHeroImage.onload = () => mediaHeroFallback.classList.add('hidden');
-    mediaHeroImage.onerror = () => {
-      mediaHeroImage.removeAttribute('src');
-      mediaHeroAmbient.removeAttribute('src');
+    if (mediaHeroFallback) {
+      mediaHeroFallback.textContent = item.outlet;
       mediaHeroFallback.classList.remove('hidden');
-    };
-    mediaHeroImage.src = imageUrl;
-    mediaHeroAmbient.src = imageUrl;
+    }
+
+    if (mediaHeroImage) {
+      mediaHeroImage.alt = `${item.outlet}: ${item.title}`;
+      mediaHeroImage.onload = () => mediaHeroFallback?.classList.add('hidden');
+      mediaHeroImage.onerror = () => {
+        mediaHeroImage.removeAttribute('src');
+        mediaHeroAmbient?.removeAttribute('src');
+        mediaHeroFallback?.classList.remove('hidden');
+      };
+      mediaHeroImage.src = imageUrl;
+    }
+    if (mediaHeroAmbient) mediaHeroAmbient.src = imageUrl;
 
     mediaText.innerHTML = item.articleHtml ||
       `<article class="media-article">${(item.text || []).map(p => `<p>${p}</p>`).join('')}</article>`;
@@ -401,13 +425,14 @@
       );
     }
 
-    mediaArticleScroll.scrollTop = 0;
+    if (mediaArticleScroll) mediaArticleScroll.scrollTop = 0;
     if (typeof triggerBodyEnter === 'function') triggerBodyEnter('#mediaText');
   };
 
   const transferSelectedUpdate = (button, index) => {
-    const item = MEDIA_RELEASES[index];
+    const item = Array.isArray(MEDIA_RELEASES) ? MEDIA_RELEASES[index] : null;
     if (!item || !button) return;
+
     mediaTransfer.transferTo(
       button,
       index,
@@ -419,14 +444,18 @@
   };
 
   function selectUpdate(index) {
-    const item = MEDIA_RELEASES[index];
-    if (!item) return;
+    const item = Array.isArray(MEDIA_RELEASES) ? MEDIA_RELEASES[index] : null;
+    if (!item || !mediaList) return;
 
     cancelCatalogueMotion();
 
     mediaTransfer._cancelActive();
     mediaTransfer._restorePreviousLabel();
     if (mediaTransfer.card) mediaTransfer.card.style.display = 'none';
+    if (mediaTransfer.frame) {
+      mediaTransfer.frame.classList.remove('has-transfer-band');
+      mediaTransfer.frame.style.removeProperty('--transfer-band-reserve');
+    }
 
     let button = mediaList.querySelector(`button[data-media-index="${index}"]`);
     if (!button) return;
@@ -463,6 +492,7 @@
 
     catalogueTimer = setTimeout(() => {
       if (token !== catalogueGeneration) return;
+
       try { catalogueAnim.cancel(); } catch (err) {}
       catalogueAnim = null;
       catalogueTimer = null;
@@ -477,25 +507,203 @@
   }
 
   const resetUpdatesCatalogue = () => {
+    if (!mediaList) return;
+
     cancelCatalogueMotion();
     mediaTransfer.reset();
     renderCatalogue();
     setSelectedUpdate(-1);
-    mediaStage.classList.remove('has-article');
-    mediaIdle.classList.remove('hidden');
-    mediaArticlePane.classList.add('hidden');
-    mediaHeroImage.removeAttribute('src');
-    mediaHeroAmbient.removeAttribute('src');
-    mediaTitle.textContent = 'Select Update';
-    mediaArticleScroll.scrollTop = 0;
+    mediaStage?.classList.remove('has-article');
+    mediaIdle?.classList.remove('hidden');
+    mediaArticlePane?.classList.add('hidden');
+    mediaHeroImage?.removeAttribute('src');
+    mediaHeroAmbient?.removeAttribute('src');
+    if (mediaTitle) mediaTitle.textContent = 'Select Update';
+    if (mediaArticleScroll) mediaArticleScroll.scrollTop = 0;
 
     requestAnimationFrame(() => {
       if (window.mediaSilverWorldMap) window.mediaSilverWorldMap.resize();
     });
   };
 
-  renderCatalogue();
-  window.resetMediaExplorer = resetUpdatesCatalogue;
-  window.showMediaArticle = selectUpdate;
-  resetUpdatesCatalogue();
+  if (mediaList && Array.isArray(MEDIA_RELEASES)) {
+    renderCatalogue();
+    window.resetMediaExplorer = resetUpdatesCatalogue;
+    window.showMediaArticle = selectUpdate;
+    resetUpdatesCatalogue();
+  }
+
+  /* Mission uses the same visual/rubricator treatment as Updates, while keeping
+     its own chapter content and non-cyclic chapter order. */
+  const missionList = document.getElementById('missionList');
+  if (missionList) {
+    missionList.querySelectorAll('.mission-index-item').forEach(button => {
+      button.classList.add('media-update-rubricator');
+    });
+  }
+
+  /* ---------- SYSTEM ARCHITECTURE content ---------- */
+  const architectureList = document.getElementById('oryxList');
+  const architectureStage = document.getElementById('oryxStage');
+  const architectureText = document.getElementById('oryxText');
+  const architectureTitle = document.getElementById('oryxTitle');
+
+  const architectureEntries = [
+    {
+      id: 'sys-rocketship',
+      navTitle: '1. ORYX ROCKETSHIP',
+      image: 'assets/images/system/oryx-rocketship.svg',
+      imageAlt: 'Oryx Rocketship',
+      html: `
+        <div class="architecture-spec-copy">
+          <p class="architecture-spec-lead">Reusable first and second stages</p>
+          <div class="architecture-spec-group">
+            <div class="architecture-spec-label">PAYLOAD MASS</div>
+            <p>LEO - H=200 км, i=51,6°</p>
+            <p>up to 5t fully reusable</p>
+          </div>
+          <div class="architecture-spec-group">
+            <div class="architecture-spec-label">PROPULSION</div>
+            <p>First stage 5 engines × 1,000 kN / 225,000 lbf</p>
+            <p>Second stage: 5 engines × 200 kN / 45,000 lbf</p>
+          </div>
+        </div>`
+    },
+    {
+      id: 'stage-d3',
+      navTitle: '2. D3 CARGO SPACESHIP',
+      image: 'assets/images/oryx-orbit-2.png',
+      imageAlt: 'D3 Cargo Spaceship',
+      html: `
+        <div class="architecture-spec-copy">
+          <p class="architecture-spec-lead">Reusable second stage, first of the kind</p>
+          <ul class="architecture-spec-list">
+            <li>up to 3t to LEO and return to Earth</li>
+            <li>Stations refuel and manoeuver</li>
+            <li>Standalone orbital lab</li>
+            <li>Future crew missions</li>
+            <li>Future Moon missions</li>
+          </ul>
+        </div>`
+    },
+    {
+      id: 'aspire-launcher',
+      navTitle: '3. ASPIRE LAUNCHER',
+      image: 'assets/images/system/aspire-launcher.svg',
+      imageAlt: 'Aspire Launcher',
+      html: `
+        <div class="architecture-spec-copy">
+          <p class="architecture-spec-lead architecture-spec-kicker">R1 TWO-STAGE MEDIUM-LIFT LAUNCHER</p>
+          <p>Two-stage medium-lift space launch vehicle</p>
+          <div class="architecture-spec-group">
+            <p>LEO - H=200 км, i=51,6°</p>
+            <p>15 t reusable, 17 t expendable</p>
+          </div>
+          <p>Reusable first stage and fairing leading to lower operating costs</p>
+          <ul class="architecture-spec-list">
+            <li>Green methane-oxygen engines optimized for reusability</li>
+            <li>Composite second stage with high mass ratio</li>
+            <li>First in class reusable fairing for launching satellites</li>
+          </ul>
+        </div>`
+    },
+    {
+      id: 'stage-booster',
+      navTitle: 'R1V5 BOOSTER',
+      html: ''
+    },
+    {
+      id: 'infrastructure',
+      navTitle: 'GROUND INFRASTRUCTURE',
+      html: ''
+    },
+    {
+      id: 'location-kazakhstan',
+      navTitle: 'NEW SPACEPORT & PROPULSION TEST FACILITY, KAZAKHSTAN',
+      html: ''
+    },
+    {
+      id: 'location-uae',
+      navTitle: 'HQ & MANUFACTURING FACILITY, UNITED ARAB EMIRATES',
+      html: ''
+    },
+    {
+      id: 'location-varna',
+      navTitle: 'R&D OFFICE',
+      html: ''
+    }
+  ];
+
+  const showArchitectureEntry = index => {
+    const entry = architectureEntries[index];
+    if (!entry || !architectureText) return;
+
+    architectureStage?.classList.add('has-article');
+    if (architectureTitle) architectureTitle.textContent = entry.navTitle;
+
+    const visual = entry.image
+      ? `<figure class="architecture-spec-visual"><img src="${escapeHTML(entry.image)}" alt="${escapeHTML(entry.imageAlt || entry.navTitle)}"></figure>`
+      : '';
+
+    architectureText.innerHTML =
+      `<div class="architecture-spec-layout">${visual}${entry.html || ''}</div>`;
+
+    if (architectureList) {
+      architectureList.querySelectorAll('button[data-architecture-index]').forEach(button => {
+        const active = Number(button.dataset.architectureIndex) === index;
+        button.classList.toggle('is-active', active);
+        button.setAttribute('aria-current', active ? 'true' : 'false');
+      });
+    }
+
+    if (typeof triggerBodyEnter === 'function') triggerBodyEnter('#oryxText');
+    const scroll = architectureStage?.querySelector('.media-article-scroll');
+    if (scroll) scroll.scrollTop = 0;
+  };
+
+  const transferArchitectureEntry = (button, index, immediate) => {
+    const entry = architectureEntries[index];
+    if (!entry || !button) return;
+
+    architectureTransfer.transferTo(
+      button,
+      index,
+      entry.navTitle,
+      entry.navTitle,
+      () => showArchitectureEntry(index),
+      !!immediate
+    );
+  };
+
+  const renderArchitectureCatalogue = () => {
+    if (!architectureList) return;
+
+    architectureTransfer.reset();
+    architectureList.innerHTML = '';
+
+    architectureEntries.forEach((entry, index) => {
+      const button = document.createElement('button');
+      button.type = 'button';
+      button.dataset.architectureIndex = String(index);
+      button.className = 'media-index-item architecture-rubricator';
+      button.innerHTML =
+        `<span class="media-index-item-outlet taxonomy-index-name">${escapeHTML(entry.navTitle)}</span>` +
+        '<span class="media-index-item-arrow" aria-hidden="true">↗</span>';
+      button.addEventListener('click', () => transferArchitectureEntry(button, index, false));
+      architectureList.appendChild(button);
+    });
+
+    const first = architectureList.querySelector('button[data-architecture-index="0"]');
+    if (first) transferArchitectureEntry(first, 0, true);
+  };
+
+  if (architectureList) renderArchitectureCatalogue();
+
+  window.addEventListener('resize', () => {
+    requestAnimationFrame(() => {
+      architectureTransfer.resync();
+      missionTransfer.resync();
+      mediaTransfer.resync();
+    });
+  });
 })();
