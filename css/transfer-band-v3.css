@@ -203,6 +203,11 @@ body .architecture-shell.media-shell {
   background: #1e1c28 !important;
 }
 
+/* The supplied architecture brief defines these three rubricator cards. */
+#architectureWorkspace #oryxList > .architecture-rubricator:nth-child(n+4) {
+  display: none !important;
+}
+
 #architectureWorkspace .media-article-body {
   max-width: none !important;
   padding: 16px 24px 44px !important;
