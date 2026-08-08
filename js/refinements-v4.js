@@ -1,4 +1,4 @@
-/* Aspire refinement pass v5 — loaded after transfer-band-v3.js */
+/* Aspire refinement pass v6 — loaded after transfer-band-v3.js */
 (function () {
   'use strict';
 
@@ -9,9 +9,11 @@
     .replace(/"/g, '&quot;')
     .replace(/'/g, '&#039;');
 
-  /* Final visual corrections for the three explorer shells. */
+  /* Final explorer + section corrections. Kept deliberately CSS-only where
+     possible: no subtree observers and no eager decode of the entire Updates
+     image library, both of which can stall the main thread on modal open. */
   const style = document.createElement('style');
-  style.id = 'aspire-refinement-v5';
+  style.id = 'aspire-refinement-v6';
   style.textContent = `
     /* Outer MISSION / UPDATES / SYSTEM ARCHITECTURE shells are rectangular. */
     #mission-modal .media-shell,
@@ -45,9 +47,12 @@
         gap: 0 !important;
         padding: 0 !important;
       }
-      #architectureWorkspace > .media-index-pane {
+      #architectureWorkspace > .media-index-pane,
+      #missionWorkspace > .media-index-pane,
+      #mediaWorkspace > .media-index-pane {
         flex: none !important;
         width: auto !important;
+        min-width: 0 !important;
       }
       #architectureWorkspace > .media-stage,
       #missionWorkspace > .media-stage,
@@ -56,7 +61,7 @@
       }
     }
 
-    /* No delayed body/image entrance after selecting Mission or Updates. */
+    /* Mission / Updates content is born in its final position. */
     .article-body-enter,
     #mediaArticlePane,
     #mediaText,
@@ -65,13 +70,15 @@
     #mediaHeroImage,
     #mediaHeroAmbient,
     #missionArticlePane,
+    #missionArticleScroll,
     #missionText,
-    #missionText .media-article,
+    #missionText > *,
     #oryxText,
     #oryxText .architecture-spec-layout,
     #oryxText .architecture-spec-visual {
       animation: none !important;
       transition: none !important;
+      transform: none !important;
     }
     #mediaArticlePane,
     #mediaText,
@@ -79,15 +86,16 @@
     #mediaArticlePane .media-article-visual,
     #mediaHeroImage,
     #missionArticlePane,
+    #missionArticleScroll,
     #missionText,
-    #missionText .media-article,
+    #missionText > *,
     #oryxText,
     #oryxText .architecture-spec-layout,
     #oryxText .architecture-spec-visual {
       opacity: 1 !important;
     }
 
-    /* Remove only the decorative line/facet above ROADMAP. */
+    /* Remove only the decorative rule/facets above ROADMAP. */
     .project-roadmap-section > .section-bar {
       border-top: 0 !important;
       clip-path: none !important;
@@ -98,57 +106,68 @@
       display: none !important;
       content: none !important;
     }
+
+    /* PROGRAM NETWORK must start cleanly: no outer/header rule above title. */
+    .partners-shell {
+      clip-path: none !important;
+      border-top: 0 !important;
+      box-shadow: none !important;
+    }
+    .partners-shell::before,
+    .partners-shell::after,
+    .partners-shell > .section-bar::before,
+    .partners-shell > .section-bar::after {
+      display: none !important;
+      content: none !important;
+    }
+    .partners-shell > .section-bar {
+      clip-path: none !important;
+      border-top: 0 !important;
+      box-shadow: none !important;
+    }
   `;
   document.head.appendChild(style);
 
-  /* Disable the legacy delayed article-body enter helper at its source. */
+  /* Disable the legacy delayed entrance helper at the source. */
   window.triggerBodyEnter = function (selector) {
-    document.querySelectorAll(selector || '').forEach(node => {
+    if (!selector) return;
+    document.querySelectorAll(selector).forEach(node => {
       node.classList.remove('article-body-enter');
       node.style.opacity = '1';
       node.style.transform = 'none';
+      node.style.animation = 'none';
+      node.style.transition = 'none';
     });
   };
 
-  const stabilizeArticleRoot = root => {
-    if (!root) return;
-    root.classList.remove('article-body-enter');
-    root.querySelectorAll('.article-body-enter').forEach(node => node.classList.remove('article-body-enter'));
-  };
-  ['mediaText', 'missionText'].forEach(id => {
-    const root = document.getElementById(id);
-    if (!root) return;
-    stabilizeArticleRoot(root);
-    new MutationObserver(() => stabilizeArticleRoot(root)).observe(root, {
-      childList: true,
-      subtree: true,
-      attributes: true,
-      attributeFilter: ['class']
-    });
-  });
-
-  /* Decode Updates imagery ahead of interaction; pointer hover reinforces it. */
-  const preloadCache = new Map();
+  /* Preload only the Updates image the user is actually pointing at. The v5
+     implementation decoded every large press image at once, which was wasteful
+     and could make Mission/Updates opening feel frozen on the main thread. */
+  const preloadCache = new Set();
   const preloadUpdate = index => {
     try {
       const item = Array.isArray(MEDIA_RELEASES) ? MEDIA_RELEASES[index] : null;
       if (!item) return;
       const src = item.imageData || (item.fileId ? `https://drive.google.com/thumbnail?id=${encodeURIComponent(item.fileId)}&sz=w1800` : '');
       if (!src || preloadCache.has(src)) return;
+      preloadCache.add(src);
       const image = new Image();
       image.decoding = 'async';
       image.src = src;
-      const ready = typeof image.decode === 'function' ? image.decode().catch(() => {}) : Promise.resolve();
-      preloadCache.set(src, ready);
     } catch (err) {}
   };
-  try {
-    if (Array.isArray(MEDIA_RELEASES)) MEDIA_RELEASES.forEach((_, index) => preloadUpdate(index));
-  } catch (err) {}
-  const mediaList = document.getElementById('mediaList');
-  mediaList?.addEventListener('pointerover', event => {
+  document.getElementById('mediaList')?.addEventListener('pointerover', event => {
     const button = event.target.closest('button[data-media-index]');
     if (button) preloadUpdate(Number(button.dataset.mediaIndex));
+  }, { passive: true });
+
+  /* Ensure Mission has no residual enter state immediately after article
+     selection, without observing the whole subtree continuously. */
+  document.getElementById('missionList')?.addEventListener('click', () => {
+    requestAnimationFrame(() => window.triggerBodyEnter('#missionText'));
+  });
+  document.getElementById('mediaList')?.addEventListener('click', () => {
+    requestAnimationFrame(() => window.triggerBodyEnter('#mediaText'));
   });
 
   /* Partner copy/link corrections. */
@@ -176,8 +195,7 @@
     }
   }
 
-  /* SYSTEM ARCHITECTURE — retain the shared transfer interaction, but use the
-     supplied AVIF renders for the three requested cards. */
+  /* SYSTEM ARCHITECTURE — same transfer interaction, supplied AVIF renders. */
   const list = document.getElementById('oryxList');
   const stage = document.getElementById('oryxStage');
   const text = document.getElementById('oryxText');
