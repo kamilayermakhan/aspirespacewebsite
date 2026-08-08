@@ -404,8 +404,25 @@
                 controller.transferTo(row, index, text, prepareContent, immediate);
             };
 
+            /* On the desktop fly animation the card is legitimately hidden
+               while the row scrolls into the top slot it will rise from, so
+               transferTo waits for that scroll to land first. The stacked
+               mobile layout skips the fly animation entirely (see
+               transferTo's stackedLayout() branch) and docks instantly, so
+               there is nothing left for the wait to protect — it only opened
+               a ~150-340ms window where the band, its reserved space and the
+               article content were all torn down with no replacement yet
+               drawn, which read as the heading vanishing. Update immediately
+               there and let the list's scroll-to-top run alongside it purely
+               as a "bring the tapped row into view" convenience. */
             if (immediate || !list) {
                 proceed();
+                return;
+            }
+
+            if (TransferCardController.stackedLayout()) {
+                proceed();
+                scrollRowToTop(list, row, controller, token);
                 return;
             }
 

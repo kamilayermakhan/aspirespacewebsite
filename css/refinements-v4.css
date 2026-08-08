@@ -24,10 +24,11 @@ body .aspire-hero .hero-headline {
   text-transform: uppercase;
 }
 
-/* FACET LANGUAGE: upper corners only, with the cut explicitly stroked. */
+/* FACET LANGUAGE: upper corners only, with the cut explicitly stroked.
+   .section-bar (the PROGRAM NETWORK / ROADMAP header bars) is intentionally
+   left out of this group — a plain bar with no chamfer stroke there. */
 .transfer-card.transfer-band-v3,
 .media-shell-header,
-.section-bar,
 .roadmap-node,
 .partner-card,
 .partners-shell,
@@ -39,7 +40,6 @@ body .aspire-hero .hero-headline {
 
 .transfer-card.transfer-band-v3,
 .media-shell-header,
-.section-bar,
 .roadmap-node,
 .partner-card,
 .partners-shell {
@@ -53,8 +53,6 @@ body .aspire-hero .hero-headline {
 .transfer-card.transfer-band-v3::after,
 .media-shell-header::before,
 .media-shell-header::after,
-.section-bar::before,
-.section-bar::after,
 .roadmap-node::before,
 .roadmap-node::after,
 .partner-card::before,
@@ -71,7 +69,6 @@ body .aspire-hero .hero-headline {
 }
 .transfer-card.transfer-band-v3::before,
 .media-shell-header::before,
-.section-bar::before,
 .roadmap-node::before,
 .partner-card::before,
 .partners-shell::before {
@@ -82,7 +79,6 @@ body .aspire-hero .hero-headline {
 }
 .transfer-card.transfer-band-v3::after,
 .media-shell-header::after,
-.section-bar::after,
 .roadmap-node::after,
 .partner-card::after,
 .partners-shell::after {
