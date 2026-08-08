@@ -1,4 +1,4 @@
-/* Aspire refinement pass v6 — loaded after transfer-band-v3.js */
+/* Aspire refinement pass v7 — loaded after transfer-band-v3.js */
 (function () {
   'use strict';
 
@@ -9,13 +9,15 @@
     .replace(/"/g, '&quot;')
     .replace(/'/g, '&#039;');
 
-  /* Final explorer + section corrections. Kept deliberately CSS-only where
-     possible: no subtree observers and no eager decode of the entire Updates
-     image library, both of which can stall the main thread on modal open. */
+  const px = value => {
+    const n = parseFloat(value);
+    return Number.isFinite(n) ? n : 0;
+  };
+
   const style = document.createElement('style');
-  style.id = 'aspire-refinement-v6';
+  style.id = 'aspire-refinement-v7';
   style.textContent = `
-    /* Outer MISSION / UPDATES / SYSTEM ARCHITECTURE shells are rectangular. */
+    /* Outer MISSION / UPDATES / SYSTEM ARCHITECTURE shells stay rectangular. */
     #mission-modal .media-shell,
     #media-modal .media-shell,
     body .architecture-shell.media-shell {
@@ -61,9 +63,10 @@
       }
     }
 
-    /* Mission / Updates content is born in its final position. */
+    /* Content is born in its final position: no delayed drop/fade. */
     .article-body-enter,
     #mediaArticlePane,
+    #mediaArticleScroll,
     #mediaText,
     #mediaText .media-article,
     #mediaArticlePane .media-article-visual,
@@ -75,27 +78,66 @@
     #missionText > *,
     #oryxText,
     #oryxText .architecture-spec-layout,
-    #oryxText .architecture-spec-visual {
+    #oryxText .architecture-spec-visual,
+    #oryxText .architecture-spec-visual img {
       animation: none !important;
       transition: none !important;
       transform: none !important;
-    }
-    #mediaArticlePane,
-    #mediaText,
-    #mediaText .media-article,
-    #mediaArticlePane .media-article-visual,
-    #mediaHeroImage,
-    #missionArticlePane,
-    #missionArticleScroll,
-    #missionText,
-    #missionText > *,
-    #oryxText,
-    #oryxText .architecture-spec-layout,
-    #oryxText .architecture-spec-visual {
       opacity: 1 !important;
     }
 
-    /* Remove only the decorative rule/facets above ROADMAP. */
+    /* A source position that has already been transferred stays structurally
+       present but visually empty. It never collapses the catalogue. */
+    .media-index-item--evacuated,
+    .media-index-item--evacuated:hover,
+    .media-index-item--evacuated.is-active {
+      background: transparent !important;
+      background-image: none !important;
+      box-shadow: none !important;
+    }
+    .media-index-item--evacuated .media-index-item-title,
+    .media-index-item--evacuated .media-index-item-outlet,
+    .media-index-item--evacuated .media-index-item-arrow,
+    .media-index-item--evacuated .taxonomy-index-name {
+      visibility: hidden !important;
+    }
+
+    /* Update photographs keep the current width but use their intrinsic aspect
+       ratio instead of being forced into a shallow fixed-height viewport. */
+    #mediaArticlePane .media-article-visual {
+      width: 100% !important;
+      height: auto !important;
+      min-height: 0 !important;
+      max-height: none !important;
+      overflow: visible !important;
+    }
+    #mediaArticlePane .media-article-visual #mediaHeroImage {
+      position: relative !important;
+      display: block !important;
+      width: 100% !important;
+      height: auto !important;
+      max-height: none !important;
+      object-fit: contain !important;
+    }
+    #mediaHeroAmbient {
+      display: none !important;
+    }
+
+    /* System Architecture renders also keep their existing width and recover
+       the original image aspect ratio / height. */
+    #architectureWorkspace .architecture-spec-visual {
+      min-height: 0 !important;
+      height: auto !important;
+      align-items: flex-start !important;
+    }
+    #architectureWorkspace .architecture-spec-visual img {
+      width: min(90%, 940px) !important;
+      height: auto !important;
+      max-height: none !important;
+      object-fit: contain !important;
+    }
+
+    /* Remove decorative rule/facets above ROADMAP. */
     .project-roadmap-section > .section-bar {
       border-top: 0 !important;
       clip-path: none !important;
@@ -107,7 +149,7 @@
       content: none !important;
     }
 
-    /* PROGRAM NETWORK must start cleanly: no outer/header rule above title. */
+    /* PROGRAM NETWORK starts cleanly: no outer/header rule above title. */
     .partners-shell {
       clip-path: none !important;
       border-top: 0 !important;
@@ -140,29 +182,128 @@
     });
   };
 
-  /* Preload only the Updates image the user is actually pointing at. The v5
-     implementation decoded every large press image at once, which was wasteful
-     and could make Mission/Updates opening feel frozen on the main thread. */
-  const preloadCache = new Set();
-  const preloadUpdate = index => {
-    try {
-      const item = Array.isArray(MEDIA_RELEASES) ? MEDIA_RELEASES[index] : null;
-      if (!item) return;
-      const src = item.imageData || (item.fileId ? `https://drive.google.com/thumbnail?id=${encodeURIComponent(item.fileId)}&sz=w1800` : '');
-      if (!src || preloadCache.has(src)) return;
-      preloadCache.add(src);
-      const image = new Image();
-      image.decoding = 'async';
-      image.src = src;
-    } catch (err) {}
+  /* ------------------------------------------------------------------
+     Shared explorer state: one current selection + persistent evacuated
+     source slots. Previous source labels no longer reappear when a lower
+     rubricator is selected.
+     ------------------------------------------------------------------ */
+  if (typeof TransferCardController !== 'undefined') {
+    const proto = TransferCardController.prototype;
+    const baseTransferTo = proto.transferTo;
+
+    const ensureState = controller => {
+      if (!controller.evacuatedRows) controller.evacuatedRows = new Set();
+      return controller.evacuatedRows;
+    };
+
+    proto._restorePreviousLabel = function () {
+      if (!this.sourceLabel) return;
+      const row = this.sourceLabel;
+      row.classList.remove('media-index-item--transferring');
+      row.classList.add('media-index-item--evacuated');
+      ensureState(this).add(row);
+      this.sourceLabel = null;
+    };
+
+    proto.reset = function () {
+      this._cancelActive();
+      const rows = ensureState(this);
+      if (this.sourceLabel) rows.add(this.sourceLabel);
+      rows.forEach(row => {
+        if (!row || !row.classList) return;
+        row.classList.remove('media-index-item--transferring');
+        row.classList.remove('media-index-item--evacuated');
+      });
+      rows.clear();
+      this.sourceLabel = null;
+      this.dockedIndex = null;
+      this.dockedRow = null;
+      if (this.card) this.card.style.display = 'none';
+      if (this.frame) {
+        this.frame.classList.remove('has-transfer-band');
+        this.frame.style.removeProperty('--transfer-band-reserve');
+      }
+    };
+
+    /* Dock the moving label on the exact left edge of the article text column,
+       not on a hard-coded stage inset. */
+    const baseMeasureBand = proto._measureBand;
+    proto._measureBand = function (row) {
+      const measured = baseMeasureBand.call(this, row);
+      if (!measured || !this.frame) return measured;
+      const body = this.frame.querySelector('.media-article-body');
+      if (!body) return measured;
+      const bodyRect = body.getBoundingClientRect();
+      const bodyCS = getComputedStyle(body);
+      measured.dock.labelX = bodyRect.left - measured.frameRect.left + px(bodyCS.paddingLeft);
+      return measured;
+    };
+
+    proto.transferTo = function (row, index, sourceText, targetText, prepareContent, immediate) {
+      /* Clicking the currently docked blank source slot again should not destroy
+         its geometry or try to measure a hidden label. */
+      if (row && row === this.sourceLabel && this.dockedIndex === index) {
+        if (typeof prepareContent === 'function') prepareContent();
+        return;
+      }
+      return baseTransferTo.call(this, row, index, sourceText, targetText, prepareContent, immediate);
+    };
+  }
+
+  /* ------------------------------------------------------------------
+     Image warming. The three Architecture AVIFs are tiny enough to preload
+     immediately. Updates images are fetched/decode-warmed one at a time during
+     idle time so clicks do not wait for network/decode, without blocking open.
+     ------------------------------------------------------------------ */
+  const retainedPreloads = [];
+  const warmImage = src => {
+    if (!src) return Promise.resolve();
+    const image = new Image();
+    image.decoding = 'async';
+    image.src = src;
+    retainedPreloads.push(image);
+    if (typeof image.decode === 'function') return image.decode().catch(() => {});
+    return Promise.resolve();
   };
+
+  [
+    'assets/images/system/R1V5.avif',
+    'assets/images/system/S2_5.avif',
+    'assets/images/system/Fairings_2.avif'
+  ].forEach(src => { warmImage(src); });
+
+  const updateSources = [];
+  try {
+    if (Array.isArray(MEDIA_RELEASES)) {
+      MEDIA_RELEASES.forEach(item => {
+        const src = item.imageData || (item.fileId
+          ? `https://drive.google.com/thumbnail?id=${encodeURIComponent(item.fileId)}&sz=w1800`
+          : '');
+        if (src && !updateSources.includes(src)) updateSources.push(src);
+      });
+    }
+  } catch (err) {}
+
+  const scheduleWarm = index => {
+    if (index >= updateSources.length) return;
+    const run = () => {
+      warmImage(updateSources[index]).finally(() => scheduleWarm(index + 1));
+    };
+    if ('requestIdleCallback' in window) {
+      window.requestIdleCallback(run, { timeout: 900 });
+    } else {
+      setTimeout(run, 120 + index * 40);
+    }
+  };
+  scheduleWarm(0);
+
   document.getElementById('mediaList')?.addEventListener('pointerover', event => {
     const button = event.target.closest('button[data-media-index]');
-    if (button) preloadUpdate(Number(button.dataset.mediaIndex));
+    if (!button) return;
+    const index = Number(button.dataset.mediaIndex);
+    if (Number.isFinite(index) && updateSources[index]) warmImage(updateSources[index]);
   }, { passive: true });
 
-  /* Ensure Mission has no residual enter state immediately after article
-     selection, without observing the whole subtree continuously. */
   document.getElementById('missionList')?.addEventListener('click', () => {
     requestAnimationFrame(() => window.triggerBodyEnter('#missionText'));
   });
@@ -184,7 +325,7 @@
     const oldLink = partnerCards[2].querySelector('.partner-card-link');
     if (eyebrow) eyebrow.textContent = 'GROUND INFRASTRUCTURE';
     if (heading) heading.textContent = 'ASPIRE LAUNCH';
-    if (oldLink) {
+    if (oldLink && oldLink.tagName !== 'A') {
       const link = document.createElement('a');
       link.className = 'partner-card-link';
       link.href = 'https://www.aspirelaunch.space/';
@@ -192,10 +333,15 @@
       link.rel = 'noopener';
       link.textContent = 'VISIT SITE ↗';
       oldLink.replaceWith(link);
+    } else if (oldLink) {
+      oldLink.href = 'https://www.aspirelaunch.space/';
+      oldLink.target = '_blank';
+      oldLink.rel = 'noopener';
+      oldLink.textContent = 'VISIT SITE ↗';
     }
   }
 
-  /* SYSTEM ARCHITECTURE — same transfer interaction, supplied AVIF renders. */
+  /* SYSTEM ARCHITECTURE — shared transfer interaction + supplied AVIF renders. */
   const list = document.getElementById('oryxList');
   const stage = document.getElementById('oryxStage');
   const text = document.getElementById('oryxText');
