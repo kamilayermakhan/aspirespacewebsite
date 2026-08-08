@@ -29,6 +29,7 @@
 </template>
 <link rel="stylesheet" href="css/styles.css">
 <link rel="stylesheet" href="css/transfer-band-v3.css">
+<link rel="stylesheet" href="css/refinements-v4.css">
 </head>
 <body class="min-h-screen flex flex-col selection:bg-zinc-300 selection:text-black">
 <canvas aria-hidden="true" class="fixed inset-0 w-full h-full z-0 opacity-35 pointer-events-none" id="dither-gl"></canvas>
@@ -49,7 +50,7 @@
 <div class="aspire-hero-grid">
 <div class="aspire-hero-copy">
 <h1 class="hero-headline text-white" data-comment-anchor="00859593f5-h1" style="text-align: left">BUILDING NEW LINES TO AND FROM SPACE</h1>
-
+<p class="hero-subtitle">FOR COMMERCE, SCIENCE AND NATIONAL SECURITY</p>
 </div>
 </div>
 </section>
@@ -80,63 +81,65 @@
 </div>
 </div>
 </section>
+
+<section class="partners-section" aria-labelledby="partnersTitle">
+<div class="partners-shell">
+<div class="section-bar"><span class="section-bar-label" id="partnersTitle">PROGRAM NETWORK / PARTNERS</span></div>
+<div class="partners-grid">
+<article class="partner-card">
+<div class="partner-card-eyebrow">COMPUTATIONAL ENGINEERING & PROPULSION</div>
+<h3 class="partner-card-title">LEAP 71</h3>
+<a class="partner-card-link" href="https://leap71.com/" target="_blank" rel="noopener">VISIT SITE ↗</a>
+</article>
+<article class="partner-card">
+<div class="partner-card-eyebrow">PROGRAM & SYSTEMS ENGINEERING</div>
+<h3 class="partner-card-title">BALKAN SPACE ENGINEERING</h3>
+<a class="partner-card-link" href="https://www.spacetech.world/" target="_blank" rel="noopener">VISIT SITE ↗</a>
+</article>
+<article class="partner-card">
+<div class="partner-card-eyebrow">PARTNER</div>
+<h3 class="partner-card-title">SPICE SPACE LOUNGE</h3>
+<div class="partner-card-link partner-card-link--static">PROGRAM PARTNER</div>
+</article>
+</div>
+</div>
+</section>
 <!-- ROADMAP SECTION -->
-<section class="space-y-4 pt-4 project-roadmap-section">
-<div class="flex justify-between items-center text-xs border-b border-zinc-700/50 pb-2">
-<span class="text-white font-bold tracking-wider flex items-center gap-2">ROADMAP</span>
-</div>
-<div class="roadmap-scroll">
-<div class="roadmap-track">
-<div class="bg-black/60 border border-zinc-500/30 p-4 space-y-3 scanline-overlay backdrop-blur-sm hover:border-zinc-400/50 transition-all flex flex-col justify-between roadmap-card">
-<div>
-<div class="text-[10px] text-zinc-300 font-mono font-bold mb-2"> Q4 2026 </div>
-<div class="roadmap-card-title">ENGINE HOT FIRE</div>
-<p class="text-[11px] text-zinc-400 font-sans-ui mt-2 leading-relaxed mb-3">
-First integrated hot-fire campaign for the aerospike propulsion system validates ignition, steady-state combustion and ground-test data loops.
-</p>
-</div>
-
-</div>
-<div class="bg-black/60 border border-zinc-500/30 p-4 space-y-3 scanline-overlay backdrop-blur-sm hover:border-zinc-400/50 transition-all flex flex-col justify-between roadmap-card">
-<div>
-<div class="text-[10px] text-zinc-300 font-mono font-bold mb-2"> 2027 </div>
-<div class="roadmap-card-title">HOPPER TEST</div>
-<p class="text-[11px] text-zinc-400 font-sans-ui mt-2 leading-relaxed mb-3">
-A vertical hop demonstration verifies low-altitude control, throttle response, landing logic and deployable-leg behaviour for the booster stage.
-</p>
-</div>
-
-</div>
-<div class="bg-black/60 border border-zinc-500/30 p-4 space-y-3 scanline-overlay backdrop-blur-sm hover:border-zinc-400/50 transition-all flex flex-col justify-between roadmap-card">
-<div>
-<div class="text-[10px] text-zinc-300 font-mono font-bold mb-2"> 2028 </div>
-<div class="roadmap-card-title">SECOND STAGE TESTING</div>
-<p class="text-[11px] text-zinc-400 font-sans-ui mt-2 leading-relaxed mb-3">
-D3 flight-article testing advances through integrated systems checks, return-stage handling and standalone demonstration of the upper-stage architecture.
-</p>
-</div>
-
-</div>
-<div class="bg-black/60 border border-zinc-500/30 p-4 space-y-3 scanline-overlay backdrop-blur-sm hover:border-zinc-400/50 transition-all flex flex-col justify-between roadmap-card">
-<div>
-<div class="text-[10px] text-zinc-300 font-mono font-bold mb-2"> 2030 </div>
-<div class="roadmap-card-title">FULL SYSTEM TEST FLIGHT</div>
-<p class="text-[11px] text-zinc-400 font-sans-ui mt-2 leading-relaxed mb-3">
-A full-stack test flight brings R1v5 and D3 together in one mission profile, exercising staging, guidance and recovery choreography across the system.
-</p>
-</div>
-
-</div>
-<div class="bg-black/60 border border-zinc-500/30 p-4 space-y-3 scanline-overlay backdrop-blur-sm hover:border-zinc-400/50 transition-all flex flex-col justify-between roadmap-card">
-<div>
-<div class="text-[10px] text-zinc-300 font-mono font-bold mb-2"> 2031 </div>
-<div class="roadmap-card-title">ORBITAL LAUNCH</div>
-<p class="text-[11px] text-zinc-400 font-sans-ui mt-2 leading-relaxed mb-3">
-The first orbital launch places the system into its intended operating regime and opens the path to reusable cargo transport and routine return capability.
-</p>
-</div>
-
-</div>
+<section class="project-roadmap-section roadmap-constellation">
+<div class="section-bar"><span class="section-bar-label">ROADMAP</span></div>
+<div class="roadmap-constellation-shell">
+<div class="roadmap-spine" aria-hidden="true"></div>
+<div class="roadmap-constellation-grid">
+<article class="roadmap-node is-current">
+<div class="roadmap-node-year">Q4 2026</div>
+<div class="roadmap-node-dot" aria-hidden="true"></div>
+<h3 class="roadmap-node-title">ENGINE HOT FIRE</h3>
+<p class="roadmap-node-copy">First integrated hot-fire campaign for the aerospike propulsion system validates ignition, steady-state combustion and ground-test data loops.</p>
+</article>
+<article class="roadmap-node">
+<div class="roadmap-node-year">2027</div>
+<div class="roadmap-node-dot" aria-hidden="true"></div>
+<h3 class="roadmap-node-title">HOPPER TEST</h3>
+<p class="roadmap-node-copy">A vertical hop demonstration verifies low-altitude control, throttle response, landing logic and deployable-leg behaviour for the booster stage.</p>
+</article>
+<article class="roadmap-node">
+<div class="roadmap-node-year">2028</div>
+<div class="roadmap-node-dot" aria-hidden="true"></div>
+<h3 class="roadmap-node-title">SECOND STAGE TESTING</h3>
+<p class="roadmap-node-copy">D3 flight-article testing advances through integrated systems checks, return-stage handling and standalone demonstration of the upper-stage architecture.</p>
+</article>
+<article class="roadmap-node">
+<div class="roadmap-node-year">2030</div>
+<div class="roadmap-node-dot" aria-hidden="true"></div>
+<h3 class="roadmap-node-title">FULL SYSTEM TEST FLIGHT</h3>
+<p class="roadmap-node-copy">A full-stack test flight brings R1v5 and D3 together in one mission profile, exercising staging, guidance and recovery choreography across the system.</p>
+</article>
+<article class="roadmap-node">
+<div class="roadmap-node-year">2031</div>
+<div class="roadmap-node-dot" aria-hidden="true"></div>
+<h3 class="roadmap-node-title">ORBITAL LAUNCH</h3>
+<p class="roadmap-node-copy">The first orbital launch places the system into its intended operating regime and opens the path to reusable cargo transport and routine return capability.</p>
+</article>
 </div>
 </div>
 </section>
@@ -162,6 +165,7 @@ The first orbital launch places the system into its intended operating regime an
 <div class="social-feed-grid" id="socialFeedGrid"></div>
 </div>
 </section>
+
 <footer class="border-t border-zinc-800 bg-black py-6 px-4 text-xs text-zinc-500 font-sans-ui text-center relative z-10 flex flex-col items-center gap-2">
 <div>Aspire Space Technologies S.A. © 2026</div>
 <div class="flex items-center gap-4 text-zinc-400">
@@ -284,7 +288,9 @@ The first orbital launch places the system into its intended operating regime an
 
 
 
+
 <script src="js/script.js"></script>
 <script src="js/transfer-band-v3.js"></script>
+<script src="js/refinements-v4.js"></script>
 </body>
 </html>
