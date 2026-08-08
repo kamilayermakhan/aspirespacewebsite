@@ -189,3 +189,33 @@
 .social-feed-section {
   display: none !important;
 }
+
+/* ---------- Mobile: Mission / Updates stack the rubricator above the
+   article instead of side-by-side columns. A pre-existing rule
+   (`.media-workspace > aside, section { position: relative }`, plus a
+   `.mission-shell` override) already defeats this file's ancestor's
+   old absolute-swap mobile layout, so the rubricator pane never gets a
+   bounded height and its list can't really scroll — the docked band then
+   lands on the still-visible first row instead of the blank one. Give the
+   workspace a real flex column so the list gets a genuinely bounded,
+   scrollable box, matching how the desktop grid already stretches it. */
+@media (max-width: 680px) {
+  #missionWorkspace,
+  #mediaWorkspace {
+    display: flex !important;
+    flex-direction: column !important;
+  }
+  #missionWorkspace > .media-index-pane,
+  #mediaWorkspace > .media-index-pane {
+    flex: 0 1 44% !important;
+    max-height: 44% !important;
+    min-height: 0 !important;
+  }
+  #missionWorkspace > .media-stage,
+  #mediaWorkspace > .media-stage {
+    flex: 1 1 auto !important;
+    min-height: 0 !important;
+    overflow-y: auto !important;
+    display: block !important;
+  }
+}
