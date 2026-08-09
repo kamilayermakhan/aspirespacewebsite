@@ -131,11 +131,108 @@
 .arch-preview-d3 img { width: 80%; height: 80%; object-fit: contain; }
 .arch-preview-d3 span { position:absolute; left:10px; bottom:9px; font:8px/1 'Martian Mono',monospace; letter-spacing:.08em; color:rgba(255,255,255,.48); }
 
+/* Canonical vertical vehicle renders uploaded at repository root. The HTML
+   still carries the old AVIF src values for progressive fallback, but the
+   replaced-element content is now the final vertical artwork. */
+.arch-preview-vehicle--oryx img { content: url('../R1V5.png') !important; }
+.arch-preview-vehicle--launcher img { content: url('../Fairings_2.png') !important; }
+.arch-preview-d3 img { content: url('../S2_5.png') !important; }
+
+/* Mission / Updates visibility guard.
+   The article is allowed to disappear only while it actually owns .hidden.
+   Once a click removes that state, no inherited transition or stale explorer
+   state is allowed to make the pane or its text transparent again. */
+#missionArticlePane:not(.hidden),
+#mediaArticlePane:not(.hidden) {
+  display: block !important;
+  visibility: visible !important;
+  opacity: 1 !important;
+  min-height: 0 !important;
+}
+#missionArticlePane:not(.hidden) #missionArticleScroll,
+#mediaArticlePane:not(.hidden) #mediaArticleScroll,
+#missionArticlePane:not(.hidden) #missionText,
+#mediaArticlePane:not(.hidden) #mediaText {
+  display: block !important;
+  visibility: visible !important;
+  opacity: 1 !important;
+  transform: none !important;
+}
+#missionStage.has-article #missionIdleState,
+#mediaStage.has-article #mediaIdle {
+  display: none !important;
+}
+
 @media (max-width: 900px) {
   .arch-preview-inner { grid-template-columns:1fr; }
   .arch-preview-copy { min-height: 430px; }
   .arch-preview-visuals { min-height: 660px; }
 }
+
+/* The previous <=680px explorer implementation absolutely stacked the index
+   and article as two mutually exclusive layers. That made a perfectly valid
+   article depend on a transient is-detail class and is the failure mode behind
+   the disappearing Mission/Updates content. On phones, keep both regions in
+   normal flow instead: bounded catalogue above, article below. */
+@media (max-width: 680px) {
+  #missionWorkspace,
+  #mediaWorkspace {
+    display: flex !important;
+    flex-direction: column !important;
+    position: relative !important;
+    min-height: 0 !important;
+  }
+
+  #missionWorkspace > .media-index-pane,
+  #mediaWorkspace > .media-index-pane,
+  #missionWorkspace.is-detail > .media-index-pane,
+  #mediaWorkspace.is-detail > .media-index-pane {
+    position: relative !important;
+    inset: auto !important;
+    display: block !important;
+    z-index: 2 !important;
+    flex: 0 0 42% !important;
+    width: 100% !important;
+    min-width: 0 !important;
+    min-height: 0 !important;
+    max-height: 42% !important;
+    overflow: hidden !important;
+    border-right: 0 !important;
+    border-bottom: 1px solid rgba(255,255,255,.18) !important;
+  }
+
+  #missionWorkspace > .media-stage,
+  #mediaWorkspace > .media-stage,
+  #missionWorkspace.is-detail > .media-stage,
+  #mediaWorkspace.is-detail > .media-stage {
+    position: relative !important;
+    inset: auto !important;
+    display: block !important;
+    z-index: 3 !important;
+    flex: 1 1 58% !important;
+    width: 100% !important;
+    min-width: 0 !important;
+    min-height: 0 !important;
+    max-height: none !important;
+    overflow: auto !important;
+  }
+
+  #missionWorkspace .media-index-list,
+  #mediaWorkspace .media-index-list {
+    height: 100% !important;
+    max-height: 100% !important;
+    overflow-y: auto !important;
+  }
+
+  .media-shell.is-detail .media-shell-header .technical-label {
+    display: inline-flex !important;
+  }
+  #mission-modal .shell-back,
+  #media-modal .shell-back {
+    display: none !important;
+  }
+}
+
 @media (max-width: 620px) {
   .arch-preview { min-height:0; }
   .arch-preview-inner { padding:18px 14px 24px; }
