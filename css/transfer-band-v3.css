@@ -337,3 +337,45 @@ body .architecture-shell.media-shell {
     transition: none !important;
   }
 }
+
+/* ========================================================================
+   UPDATES stability correction
+
+   The moving Transfer Band is a visual copy. The archive row itself must
+   remain a permanent navigation control. Previously the shared transfer
+   rules deliberately removed its backing and set its title/arrow to
+   visibility:hidden while the article was open. That made a selected update
+   appear to have been deleted from the archive and could leave no obvious way
+   back to it after another article was opened.
+
+   For UPDATES only, keep every source row visible and interactive at all
+   times. Mission and System Architecture retain their original behaviour.
+   ======================================================================== */
+#media-modal #mediaList .media-index-item.media-index-item--transferring {
+  background: linear-gradient(180deg, rgba(255,255,255,.06), rgba(255,255,255,.02)) !important;
+  border-top: 1px solid rgba(255,255,255,.34) !important;
+  border-bottom-color: rgba(228,230,238,.42) !important;
+  box-shadow: 0 2px 0 -1px rgba(228,230,238,.30) !important;
+  outline: none !important;
+  clip-path: polygon(10px 0, calc(100% - 10px) 0, 100% 10px, 100% 100%, 0 100%, 0 10px) !important;
+  pointer-events: auto !important;
+}
+
+#media-modal #mediaList .media-index-item--transferring .media-index-item-title,
+#media-modal #mediaList .media-index-item--transferring .media-index-item-outlet,
+#media-modal #mediaList .media-index-item--transferring .media-index-item-arrow {
+  visibility: visible !important;
+  opacity: 1 !important;
+}
+
+/* Keep archive navigation itself as the scrolling surface. This preserves
+   the reader's route back through the catalogue even while the visual band
+   is mounted over the article. */
+#media-modal .media-index-pane {
+  overflow-y: auto !important;
+  overscroll-behavior: contain;
+}
+
+#media-modal #mediaList {
+  scrollbar-gutter: stable;
+}
