@@ -245,7 +245,7 @@ body .taxonomy-section .media-shell-header .technical-label {
   position: absolute;
   left: 0;
   right: 0;
-  /* Sits on the head row, where the milestone markers used to be. */
+  /* Matches .roadmap-node-dot's centre; see the note there. */
   top: 46px;
   height: 1px;
   background: linear-gradient(90deg, transparent, rgba(255,255,255,.42) 9%, rgba(255,255,255,.42) 91%, transparent);
@@ -261,9 +261,10 @@ body .taxonomy-section .media-shell-header .technical-label {
   padding: 17px 17px 20px;
   background: linear-gradient(180deg, rgba(10,10,16,.93), rgba(22,20,31,.95));
 }
-/* Phase name and year share one line. The row is top-aligned and the year
-   is nudged onto the centre of the title's FIRST line, so it holds that
-   line no matter how many lines a title wraps to. */
+/* Phase name, then marker, then year — all on one line. The row is
+   top-aligned and the dot and year are nudged onto the centre of the
+   title's FIRST line, so every dot lands at the same height — and
+   therefore on the spine — no matter how many lines a title wraps to. */
 .roadmap-node-head {
   display: flex;
   align-items: flex-start;
@@ -278,6 +279,17 @@ body .taxonomy-section .media-shell-header .technical-label {
   font-size: 10px !important;
   font-weight: 700 !important;
   letter-spacing: .16em !important;
+}
+.roadmap-node-dot {
+  flex: none;
+  position: relative;
+  z-index: 3;
+  margin-top: 4px;
+  width: 11px;
+  height: 11px;
+  border-radius: 999px;
+  background: #fff;
+  box-shadow: 0 0 0 4px rgba(255,255,255,.1), 0 0 16px rgba(255,255,255,.2);
 }
 .roadmap-node-title {
   /* Takes the leading slack so the marker and year trail the phase name

@@ -31,10 +31,9 @@
 <link rel="stylesheet" href="css/transfer-band-v3.css">
 <link rel="stylesheet" href="css/refinements-v4.css">
 <link rel="stylesheet" href="css/interaction.css">
-<link rel="stylesheet" href="css/mosaic.css">
 </head>
 <body class="min-h-screen flex flex-col selection:bg-zinc-300 selection:text-black">
-<div aria-hidden="true" class="deco-mosaic deco-mosaic--page" id="dither-gl"></div>
+<canvas aria-hidden="true" class="fixed inset-0 w-full h-full z-0 opacity-35 pointer-events-none" id="dither-gl"></canvas>
 <header class="border-b border-zinc-700/50 backdrop-blur-md sticky top-0 z-50 px-4 py-2 text-xs" style="background: rgba(29, 27, 39, 0.98);" data-comment-anchor="a3125e0d97-header">
 <div class="w-full max-w-7xl mx-auto px-4 md:px-6 flex flex-row justify-between items-center gap-2">
 <div class="header-logo">
@@ -113,23 +112,23 @@
 <div class="roadmap-spine" aria-hidden="true"></div>
 <div class="roadmap-constellation-grid">
 <article class="roadmap-node is-current">
-<div class="roadmap-node-head"><h3 class="roadmap-node-title">ENGINE HOT FIRE</h3><span class="roadmap-node-year">Q4 2026</span></div>
+<div class="roadmap-node-head"><h3 class="roadmap-node-title">ENGINE HOT FIRE</h3><span class="roadmap-node-dot" aria-hidden="true"></span><span class="roadmap-node-year">Q4 2026</span></div>
 <p class="roadmap-node-copy">First integrated hot-fire campaign for the aerospike propulsion system validates ignition, steady-state combustion and ground-test data loops.</p>
 </article>
 <article class="roadmap-node">
-<div class="roadmap-node-head"><h3 class="roadmap-node-title">HOPPER TEST</h3><span class="roadmap-node-year">2027</span></div>
+<div class="roadmap-node-head"><h3 class="roadmap-node-title">HOPPER TEST</h3><span class="roadmap-node-dot" aria-hidden="true"></span><span class="roadmap-node-year">2027</span></div>
 <p class="roadmap-node-copy">A vertical hop demonstration verifies low-altitude control, throttle response, landing logic and deployable-leg behaviour for the booster stage.</p>
 </article>
 <article class="roadmap-node">
-<div class="roadmap-node-head"><h3 class="roadmap-node-title">SECOND STAGE TESTING</h3><span class="roadmap-node-year">2028</span></div>
+<div class="roadmap-node-head"><h3 class="roadmap-node-title">SECOND STAGE TESTING</h3><span class="roadmap-node-dot" aria-hidden="true"></span><span class="roadmap-node-year">2028</span></div>
 <p class="roadmap-node-copy">D3 flight-article testing advances through integrated systems checks, return-stage handling and standalone demonstration of the upper-stage architecture.</p>
 </article>
 <article class="roadmap-node">
-<div class="roadmap-node-head"><h3 class="roadmap-node-title">FULL SYSTEM TEST FLIGHT</h3><span class="roadmap-node-year">2030</span></div>
+<div class="roadmap-node-head"><h3 class="roadmap-node-title">FULL SYSTEM TEST FLIGHT</h3><span class="roadmap-node-dot" aria-hidden="true"></span><span class="roadmap-node-year">2030</span></div>
 <p class="roadmap-node-copy">A full-stack test flight brings R1v5 and D3 together in one mission profile, exercising staging, guidance and recovery choreography across the system.</p>
 </article>
 <article class="roadmap-node">
-<div class="roadmap-node-head"><h3 class="roadmap-node-title">ORBITAL LAUNCH</h3><span class="roadmap-node-year">2031</span></div>
+<div class="roadmap-node-head"><h3 class="roadmap-node-title">ORBITAL LAUNCH</h3><span class="roadmap-node-dot" aria-hidden="true"></span><span class="roadmap-node-year">2031</span></div>
 <p class="roadmap-node-copy">The first orbital launch places the system into its intended operating regime and opens the path to reusable cargo transport and routine return capability.</p>
 </article>
 </div>
@@ -174,7 +173,7 @@
 <span class="technical-label flex items-center gap-2"> MISSION ↘</span>
 <button aria-label="Close Mission" class="media-shell-close" onclick="closeModal('mission-modal')" type="button">✕</button>
 </div>
-<div class="media-workspace" id="missionWorkspace"><div aria-hidden="true" class="media-background-map deco-mosaic deco-mosaic--backdrop" id="missionBackdropGl"></div>
+<div class="media-workspace" id="missionWorkspace"><canvas aria-hidden="true" class="media-background-map" id="missionBackdropGl"></canvas>
 <aside class="media-index-pane">
 
 <div class="media-index-list" id="missionList"></div>
@@ -182,7 +181,7 @@
 </aside>
 <section class="media-stage mission-stage" id="missionStage">
 <div class="media-idle mission-idle-state" id="missionIdleState">
-<div aria-hidden="true" class="media-idle-map deco-mosaic deco-mosaic--idle" id="missionDitherGl"></div>
+<canvas aria-hidden="true" class="media-idle-map" id="missionDitherGl"></canvas>
 
 <div class="media-idle-overlay"></div>
 
@@ -210,13 +209,13 @@
 <span class="technical-label flex items-center gap-2"> UPDATES ↘</span>
 <button aria-label="Close Media and Press" class="media-shell-close" onclick="closeModal('media-modal')" type="button">✕</button>
 </div>
-<div class="media-workspace" id="mediaWorkspace"><div aria-hidden="true" class="media-background-map deco-mosaic deco-mosaic--backdrop" id="mediaBackgroundGl"></div>
+<div class="media-workspace" id="mediaWorkspace"><canvas aria-hidden="true" class="media-background-map" id="mediaBackgroundGl"></canvas>
 <aside class="media-index-pane">
 <div class="media-index-list" id="mediaList"></div>
 </aside>
 <section class="media-stage" id="mediaStage">
 <div class="media-idle" id="mediaIdle">
-<div aria-hidden="true" class="media-idle-map deco-mosaic deco-mosaic--idle" id="mediaDitherGl"></div>
+<canvas aria-hidden="true" class="media-idle-map" id="mediaDitherGl"></canvas>
 <div class="media-idle-overlay"></div>
 <div class="media-idle-caption">
 <span class="technical-label">UPDATES ARCHIVE</span>
@@ -282,6 +281,5 @@
 
 
 <script src="js/script.js"></script>
-<script src="js/mosaic.js"></script>
 </body>
 </html>

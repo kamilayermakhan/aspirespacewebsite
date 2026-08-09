@@ -1500,14 +1500,46 @@
 
     
 
-        /* The five surfaces this used to mount on — the page backdrop, the two
-           panel backdrops and the two idle screens — were all decorative
-           dither wallpaper carrying no data (nothing ever rendered a pin or a
-           label onto them), and are now the Art Deco mosaic instead; see
-           css/mosaic.css. SilverDitherWorldMap itself is left defined so any
-           surface can be handed back to the dithered map with a single
-           mount() call. Every caller of the window.*WorldMap handles is
-           already null-guarded. */
+        window.addEventListener('load', function () {
+            try {
+                window.oryxSilverWorldMap = SilverDitherWorldMap.mount({
+                    canvas: '#dither-gl',
+                    cellSize: 8,
+                    mobileCellSize: 6,
+                    mobileBreakpoint: 700
+                });
+
+                window.missionStageWorldMap = SilverDitherWorldMap.mount({
+                    canvas: '#missionDitherGl',
+                    cellSize: 8,
+                    mobileCellSize: 6,
+                    autoResize: true
+                });
+
+                window.missionBackdropWorldMap = SilverDitherWorldMap.mount({
+                    canvas: '#missionBackdropGl',
+                    cellSize: 8,
+                    mobileCellSize: 6,
+                    autoResize: true
+                });
+
+                window.mediaBackdropWorldMap = SilverDitherWorldMap.mount({
+                    canvas: '#mediaBackgroundGl',
+                    cellSize: 8,
+                    mobileCellSize: 6,
+                    autoResize: true
+                });
+
+                window.mediaSilverWorldMap = SilverDitherWorldMap.mount({
+                    canvas: '#mediaDitherGl',
+                    cellSize: 8,
+                    mobileCellSize: 6,
+                    mobileBreakpoint: 700
+                });
+            } catch (error) {
+                console.warn('Silver world map initialization failed:', error);
+            }
+        });
     
 
 (function () {
