@@ -208,39 +208,144 @@ body .architecture-shell.media-shell {
   outline: none !important;
 }
 
-/* ---------- Mobile: Mission / Updates use the same narrow-rail-beside-
-   stage layout SYSTEM ARCHITECTURE already uses at every width (see
-   .architecture-workspace, styles.css), instead of stacking the rubricator
-   above the article. Keeps the rubricator "on the side" so it is easy to
-   flip through while the article opens beside it, and its chamfered rows
-   stay visible (see TransferCardController.transferTo, which only skips
-   blanking the source row on this stacked/narrow layout). */
+/* ============================================================
+   NARROW VIEWPORTS: two-level drill-down
+   ============================================================
+   Side-by-side index + article does not survive a phone: at 390px the
+   two columns were ~150px and ~230px, which shredded both the card
+   titles and the article measure. Splitting them into two levels is the
+   standard mobile answer and the one that keeps every card full width:
+
+     level 1  the faceted index, one card per row, full width
+     level 2  the article, full width, with the docked band as its
+              heading and "← INDEX" in the shell header to go back
+
+   Both levels are stacked absolutely in the same box so switching
+   between them costs no reflow. The state is one `is-detail` class,
+   set by TransferCardController.enterDetail / exitDetail. */
 @media (max-width: 680px) {
+  #architectureWorkspace,
   #missionWorkspace,
   #mediaWorkspace {
-    display: flex !important;
-    flex-direction: row !important;
+    display: block !important;
+    position: relative !important;
   }
+  #architectureWorkspace > .media-index-pane,
   #missionWorkspace > .media-index-pane,
-  #mediaWorkspace > .media-index-pane {
-    flex: 0 0 clamp(140px, 42%, 220px) !important;
-    min-width: 0 !important;
-    max-height: none !important;
-  }
+  #mediaWorkspace > .media-index-pane,
+  #architectureWorkspace > .media-stage,
   #missionWorkspace > .media-stage,
   #mediaWorkspace > .media-stage {
-    flex: 1 1 auto !important;
+    position: absolute !important;
+    inset: 0 !important;
+    width: auto !important;
     min-width: 0 !important;
+    min-height: 0 !important;
+    max-height: none !important;
   }
-  /* Mission/Updates titles are full sentences, not short labels like
-     SYSTEM ARCHITECTURE's, so they wrap onto several lines on this narrow
-     rail — a slightly wider rail (above) keeps that readable without
-     needing to clamp/truncate them. (-webkit-line-clamp was tried here and
-     rejected: combined with .media-index-item's grid layout it produced
-     overlapping, garbled text rather than a clean truncation.) */
+
+  /* Level 1 — the index. Sits on top until a card is picked. */
+  #architectureWorkspace > .media-index-pane,
+  #missionWorkspace > .media-index-pane,
+  #mediaWorkspace > .media-index-pane {
+    z-index: 2 !important;
+    border-right: 0 !important;
+  }
+  #architectureWorkspace > .media-stage,
+  #missionWorkspace > .media-stage,
+  #mediaWorkspace > .media-stage {
+    z-index: 1 !important;
+    display: none !important;
+  }
+
+  /* Level 2 — the article. */
+  #architectureWorkspace.is-detail > .media-index-pane,
+  #missionWorkspace.is-detail > .media-index-pane,
+  #mediaWorkspace.is-detail > .media-index-pane {
+    display: none !important;
+  }
+  #architectureWorkspace.is-detail > .media-stage,
+  #missionWorkspace.is-detail > .media-stage,
+  #mediaWorkspace.is-detail > .media-stage {
+    display: block !important;
+    z-index: 3 !important;
+    overflow-y: auto !important;
+  }
+
+  /* The band is the article's heading, so it belongs to level 2 only —
+     otherwise it floats over the index once the reader goes back. */
+  .media-workspace:not(.is-detail) .transfer-card {
+    display: none !important;
+  }
+
+  /* Index cards: full width, one per row, facets kept, tap target kept
+     comfortably above the 44px minimum. */
+  #architectureWorkspace .media-index-list,
+  #missionWorkspace .media-index-list,
+  #mediaWorkspace .media-index-list {
+    padding: 10px !important;
+    gap: 8px !important;
+  }
+  #architectureWorkspace .media-index-item,
+  #missionWorkspace .media-index-item,
+  #mediaWorkspace .media-index-item {
+    width: 100% !important;
+    min-height: 56px !important;
+    margin: 0 !important;
+    padding: 14px 14px !important;
+    border: 0 !important;
+    border-top: 1px solid rgba(255, 255, 255, 0.34) !important;
+    background: linear-gradient(180deg, rgba(255, 255, 255, 0.06), rgba(255, 255, 255, 0.02)) !important;
+    box-shadow: none !important;
+    clip-path: polygon(11px 0, calc(100% - 11px) 0, 100% 11px, 100% 100%, 0 100%, 0 11px) !important;
+  }
+  #architectureWorkspace .media-index-item.is-active,
+  #missionWorkspace .media-index-item.is-active,
+  #mediaWorkspace .media-index-item.is-active {
+    outline: none !important;
+    border-top-color: #fff !important;
+    background: linear-gradient(180deg, rgba(255, 255, 255, 0.16), rgba(255, 255, 255, 0.05)) !important;
+    clip-path: polygon(11px 0, calc(100% - 11px) 0, 100% 11px, 100% 100%, 0 100%, 0 11px) !important;
+  }
+  #architectureWorkspace .media-index-item-title,
   #missionWorkspace .media-index-item-title,
-  #mediaWorkspace .media-index-item-title {
-    font-size: 12.5px !important;
-    line-height: 1.35 !important;
+  #mediaWorkspace .media-index-item-title,
+  #architectureWorkspace .media-index-item-outlet,
+  #missionWorkspace .media-index-item-outlet,
+  #mediaWorkspace .media-index-item-outlet {
+    font-size: 13.5px !important;
+    line-height: 1.4 !important;
+    white-space: normal !important;
+    overflow: visible !important;
+    text-overflow: clip !important;
   }
+  /* The drill-down affordance, including for Architecture which hides it
+     on the desktop side-by-side layout. */
+  #architectureWorkspace .media-index-item-arrow,
+  #missionWorkspace .media-index-item-arrow,
+  #mediaWorkspace .media-index-item-arrow {
+    display: block !important;
+    align-self: center !important;
+  }
+
+  /* Back control, in the shell's own header bar rather than as new chrome
+     inside the workspace (which the docked band already occupies). */
+  .media-shell.is-detail .media-shell-header .shell-back {
+    display: inline-flex !important;
+  }
+}
+
+.shell-back {
+  display: none;
+  align-items: center;
+  margin-right: 12px;
+  padding: 6px 11px;
+  border: 1px solid rgba(255, 255, 255, 0.5);
+  background: rgba(255, 255, 255, 0.07);
+  color: #fff;
+  font-family: 'Martian Mono', monospace;
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.12em;
+  clip-path: polygon(7px 0, calc(100% - 7px) 0, 100% 7px, 100% 100%, 0 100%, 0 7px);
 }

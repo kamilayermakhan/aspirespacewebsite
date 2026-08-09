@@ -245,7 +245,8 @@ body .taxonomy-section .media-shell-header .technical-label {
   position: absolute;
   left: 0;
   right: 0;
-  top: 47px;
+  /* Matches .roadmap-node-dot's centre; see the note there. */
+  top: 46px;
   height: 1px;
   background: linear-gradient(90deg, transparent, rgba(255,255,255,.42) 9%, rgba(255,255,255,.42) 91%, transparent);
 }
@@ -260,7 +261,19 @@ body .taxonomy-section .media-shell-header .technical-label {
   padding: 17px 17px 20px;
   background: linear-gradient(180deg, rgba(10,10,16,.93), rgba(22,20,31,.95));
 }
+/* Milestone marker, year and title share one line. The row is top-aligned
+   and the dot and year are nudged onto the centre of the title's FIRST
+   line, so every dot lands at the same height — and therefore on the
+   spine — no matter how many lines a given title wraps to. */
+.roadmap-node-head {
+  display: flex;
+  align-items: flex-start;
+  gap: 9px;
+  margin-bottom: 12px;
+}
 .roadmap-node-year {
+  flex: none;
+  margin-top: 3px;
   color: rgba(255,255,255,.72);
   font-family: 'Martian Mono', monospace !important;
   font-size: 10px !important;
@@ -268,17 +281,19 @@ body .taxonomy-section .media-shell-header .technical-label {
   letter-spacing: .16em !important;
 }
 .roadmap-node-dot {
+  flex: none;
   position: relative;
   z-index: 3;
+  margin-top: 4px;
   width: 11px;
   height: 11px;
-  margin: 9px 0 15px;
   border-radius: 999px;
   background: #fff;
   box-shadow: 0 0 0 4px rgba(255,255,255,.1), 0 0 16px rgba(255,255,255,.2);
 }
 .roadmap-node-title {
-  margin: 0 0 10px;
+  margin: 0;
+  min-width: 0;
   color: #fff;
   font-family: 'Montserrat', sans-serif !important;
   font-size: 16px !important;

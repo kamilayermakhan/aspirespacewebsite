@@ -29,6 +29,7 @@
             this.sourceLabel = null;
             this.dockedIndex = null;
             this.dockedRow = null;
+            this.shell = this.frame ? this.frame.closest('.media-shell') : null;
             if (this.frame) {
                 let layer = this.frame.querySelector('.transfer-layer');
                 if (!layer) {
@@ -37,6 +38,7 @@
                     this.frame.appendChild(layer);
                 }
                 this.layer = layer;
+                this._ensureBackButton();
             }
         }
 
@@ -76,6 +78,40 @@
             this.card = card;
             this.bandLabel = label;
             return card;
+        };
+
+        /* ---------- Narrow-viewport drill-down ----------
+           Below 680px the index and the article can't sit side by side and
+           stay legible, so the explorer becomes a two-level master/detail
+           view instead: the full-width faceted index first, then the article
+           on its own once a card is picked, with a back control in the
+           shell's own header bar (rather than any new chrome inside the
+           workspace, which the docked band already occupies). The state
+           lives on the shell so the header, the index, the stage and the
+           band can all key off one class. */
+        TransferCardController.prototype._ensureBackButton = function () {
+            const header = this.shell ? this.shell.querySelector('.media-shell-header') : null;
+            if (!header || header.querySelector('.shell-back')) return;
+            const back = document.createElement('button');
+            back.type = 'button';
+            back.className = 'shell-back';
+            back.textContent = '← INDEX';
+            const self = this;
+            back.addEventListener('click', function () { self.exitDetail(); });
+            header.insertBefore(back, header.firstChild);
+        };
+
+        TransferCardController.prototype.enterDetail = function () {
+            if (this.shell) this.shell.classList.add('is-detail');
+            if (this.frame) this.frame.classList.add('is-detail');
+        };
+
+        TransferCardController.prototype.exitDetail = function () {
+            if (this.shell) this.shell.classList.remove('is-detail');
+            if (this.frame) this.frame.classList.remove('is-detail');
+            if (this.dockedRow && typeof this.dockedRow.scrollIntoView === 'function') {
+                this.dockedRow.scrollIntoView({ block: 'nearest' });
+            }
         };
 
         TransferCardController.prototype._cancelActive = function () {
@@ -196,6 +232,7 @@
             this._restorePreviousLabel();
             this.dockedIndex = null;
             this.dockedRow = null;
+            this.exitDetail();
             if (this.card) this.card.style.display = 'none';
             if (this.frame) {
                 this.frame.classList.remove('has-transfer-band');
@@ -237,6 +274,13 @@
 
             if (typeof prepareContent === 'function') prepareContent();
             if (this.railLive) this.railLive.textContent = text;
+
+            /* Only a real pick drills into the detail view; the initial
+               auto-selection (immediate) leaves a narrow viewport sitting on
+               the index, which is the level a visitor should land on. This
+               runs after `before` is measured, so the source row's geometry
+               is still the one from the visible index. */
+            if (!immediate) this.enterDetail();
 
             /* Content may have changed the stage geometry (image loaded, article
                body height changed); recompute the destination while keeping the
@@ -437,17 +481,17 @@
                 controller.transferTo(row, index, text, prepareContent, immediate);
             };
 
-            /* On the desktop fly animation the card is legitimately hidden
-               while the row scrolls into the top slot it will rise from, so
-               transferTo waits for that scroll to land first. The stacked
-               mobile layout skips the fly animation entirely (see
-               transferTo's stackedLayout() branch) and docks instantly, so
-               there is nothing left for the wait to protect — it only opened
-               a ~150-340ms window where the band, its reserved space and the
-               article content were all torn down with no replacement yet
-               drawn, which read as the heading vanishing. Update immediately
-               there and let the list's scroll-to-top run alongside it purely
-               as a "bring the tapped row into view" convenience. */
+            /* Wide layout: the index and the article share the screen, so the
+               picked row scrolls up into the top slot the band then rises out
+               of, and the transfer waits for that scroll to land.
+
+               Narrow layout: the pick drills into a detail view that replaces
+               the index entirely (see enterDetail), so there is no top slot to
+               scroll to and nothing for a wait to protect — it would only open
+               a ~150-340ms window with the band and article torn down and
+               nothing drawn yet, which read as the heading vanishing. Update
+               straight away instead, and just keep the picked row in view for
+               when the reader comes back to the index. */
             if (immediate || !list) {
                 proceed();
                 return;
@@ -455,7 +499,7 @@
 
             if (TransferCardController.stackedLayout()) {
                 proceed();
-                scrollRowToTop(list, row, controller, token);
+                if (typeof row.scrollIntoView === 'function') row.scrollIntoView({ block: 'nearest' });
                 return;
             }
 
