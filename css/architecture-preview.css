@@ -1,0 +1,150 @@
+/* Homepage SYSTEM ARCHITECTURE preview.
+   Replaces the old catalogue explorer with a single cinematic family-level entry point. */
+.arch-preview {
+  position: relative;
+  overflow: hidden;
+  min-height: clamp(680px, 86vh, 980px);
+  border-top: 1px solid rgba(255,255,255,.22);
+  border-bottom: 1px solid rgba(255,255,255,.22);
+  background:
+    radial-gradient(circle at 50% 48%, rgba(255,255,255,.055), transparent 36%),
+    linear-gradient(180deg, rgba(255,255,255,.025), rgba(255,255,255,.008));
+}
+.arch-preview::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background:
+    linear-gradient(90deg, transparent 49.94%, rgba(255,255,255,.095) 50%, transparent 50.06%),
+    linear-gradient(0deg, transparent 49.94%, rgba(255,255,255,.035) 50%, transparent 50.06%);
+}
+.arch-preview-inner {
+  position: relative;
+  z-index: 2;
+  min-height: inherit;
+  padding: clamp(22px, 3vw, 42px);
+  display: grid;
+  grid-template-columns: minmax(0,.88fr) minmax(420px,1.12fr);
+  gap: clamp(24px, 4vw, 70px);
+  align-items: stretch;
+}
+.arch-preview-copy {
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  padding: 4px 0 10px;
+}
+.arch-preview-label {
+  font-family: 'Martian Mono', monospace;
+  font-size: 10px;
+  letter-spacing: .12em;
+  color: rgba(255,255,255,.58);
+}
+.arch-preview-label::before { content:'■'; color:#3157ff; font-size:7px; margin-right:8px; vertical-align:1px; }
+.arch-preview-title {
+  margin: auto 0 20px;
+  max-width: 720px;
+  font-family: 'Forma DJR', 'Inter', sans-serif;
+  font-size: clamp(48px, 6.2vw, 102px);
+  font-weight: 500;
+  line-height: .9;
+  letter-spacing: -.052em;
+  text-transform: uppercase;
+  color: #fff;
+}
+.arch-preview-deck {
+  max-width: 650px;
+  margin: 0 0 32px;
+  font-family: 'Forma DJR', 'Inter', sans-serif;
+  font-size: clamp(17px,1.45vw,22px);
+  line-height: 1.42;
+  color: rgba(255,255,255,.68);
+}
+.arch-preview-cta {
+  display: inline-flex;
+  width: fit-content;
+  align-items: center;
+  gap: 14px;
+  padding: 14px 17px;
+  border: 1px solid rgba(255,255,255,.38);
+  color: #fff;
+  text-decoration: none;
+  font: 9px/1 'Martian Mono', monospace;
+  letter-spacing: .12em;
+  clip-path: polygon(8px 0,100% 0,100% calc(100% - 8px),calc(100% - 8px) 100%,0 100%,0 8px);
+  background: rgba(255,255,255,.025);
+}
+.arch-preview-cta:hover { background: rgba(255,255,255,.09); border-color: rgba(255,255,255,.78); }
+.arch-preview-visuals {
+  position: relative;
+  min-height: 650px;
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  align-items: end;
+  gap: clamp(12px,2vw,28px);
+}
+.arch-preview-vehicle {
+  position: relative;
+  min-width: 0;
+  height: 100%;
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+}
+.arch-preview-vehicle + .arch-preview-vehicle { border-left: 1px solid rgba(255,255,255,.13); }
+.arch-preview-vehicle img {
+  display: block;
+  width: auto;
+  height: 88%;
+  max-width: 82%;
+  object-fit: contain;
+  filter: drop-shadow(0 28px 38px rgba(0,0,0,.48));
+}
+.arch-preview-vehicle--launcher img { height: 84%; }
+.arch-preview-caption {
+  position: absolute;
+  left: 18px;
+  bottom: 18px;
+  max-width: calc(100% - 36px);
+  padding: 12px 14px;
+  border-left: 1px solid rgba(255,255,255,.52);
+  background: rgba(21,20,29,.68);
+  backdrop-filter: blur(10px);
+}
+.arch-preview-caption strong { display:block; color:#fff; font-size:15px; font-weight:500; }
+.arch-preview-caption span { display:block; margin-top:4px; font:8px/1.4 'Martian Mono',monospace; letter-spacing:.08em; color:rgba(255,255,255,.5); }
+.arch-preview-d3 {
+  position: absolute;
+  top: 18px;
+  right: 20px;
+  z-index: 4;
+  width: clamp(126px, 16vw, 220px);
+  aspect-ratio: 1;
+  border: 1px solid rgba(255,255,255,.16);
+  background: rgba(20,19,28,.46);
+  backdrop-filter: blur(9px);
+  display: grid;
+  place-items: center;
+  overflow: hidden;
+}
+.arch-preview-d3 img { width: 80%; height: 80%; object-fit: contain; }
+.arch-preview-d3 span { position:absolute; left:10px; bottom:9px; font:8px/1 'Martian Mono',monospace; letter-spacing:.08em; color:rgba(255,255,255,.48); }
+
+@media (max-width: 900px) {
+  .arch-preview-inner { grid-template-columns:1fr; }
+  .arch-preview-copy { min-height: 430px; }
+  .arch-preview-visuals { min-height: 660px; }
+}
+@media (max-width: 620px) {
+  .arch-preview { min-height:0; }
+  .arch-preview-inner { padding:18px 14px 24px; }
+  .arch-preview-copy { min-height: 380px; }
+  .arch-preview-title { font-size: clamp(43px,14vw,68px); }
+  .arch-preview-visuals { grid-template-columns:1fr 1fr; min-height:520px; gap:0; }
+  .arch-preview-vehicle img { height:82%; max-width:96%; }
+  .arch-preview-vehicle--launcher img { height:78%; }
+  .arch-preview-caption { left:8px; bottom:8px; padding:9px 10px; max-width:calc(100% - 16px); }
+  .arch-preview-caption strong { font-size:12px; }
+  .arch-preview-d3 { width:112px; right:8px; top:8px; }
+}
