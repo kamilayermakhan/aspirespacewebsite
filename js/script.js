@@ -92,10 +92,21 @@
         TransferCardController.prototype._ensureBackButton = function () {
             const header = this.shell ? this.shell.querySelector('.media-shell-header') : null;
             if (!header || header.querySelector('.shell-back')) return;
+
+            /* The button carries the section's own name, taken from the
+               header's existing label (" UPDATES ↘" -> "← UPDATES"), so going
+               back is labelled with where it goes. That label is hidden
+               alongside it in the detail view (see interaction.css) — the
+               button becomes the title bar's identity rather than repeating
+               the section name twice in one narrow bar. */
+            const label = header.querySelector('.technical-label');
+            const name = label ? label.textContent.replace(/[↘↗]/g, '').trim() : '';
+
             const back = document.createElement('button');
             back.type = 'button';
             back.className = 'shell-back';
-            back.textContent = '← INDEX';
+            back.textContent = name ? '← ' + name : '←';
+            back.setAttribute('aria-label', name ? 'Back to ' + name + ' index' : 'Back to index');
             const self = this;
             back.addEventListener('click', function () { self.exitDetail(); });
             header.insertBefore(back, header.firstChild);

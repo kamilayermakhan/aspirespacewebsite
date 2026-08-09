@@ -261,10 +261,10 @@ body .taxonomy-section .media-shell-header .technical-label {
   padding: 17px 17px 20px;
   background: linear-gradient(180deg, rgba(10,10,16,.93), rgba(22,20,31,.95));
 }
-/* Milestone marker, year and title share one line. The row is top-aligned
-   and the dot and year are nudged onto the centre of the title's FIRST
-   line, so every dot lands at the same height — and therefore on the
-   spine — no matter how many lines a given title wraps to. */
+/* Phase name, then marker, then year — all on one line. The row is
+   top-aligned and the dot and year are nudged onto the centre of the
+   title's FIRST line, so every dot lands at the same height — and
+   therefore on the spine — no matter how many lines a title wraps to. */
 .roadmap-node-head {
   display: flex;
   align-items: flex-start;
@@ -292,6 +292,9 @@ body .taxonomy-section .media-shell-header .technical-label {
   box-shadow: 0 0 0 4px rgba(255,255,255,.1), 0 0 16px rgba(255,255,255,.2);
 }
 .roadmap-node-title {
+  /* Takes the leading slack so the marker and year trail the phase name
+     and line up down the right edge of the row of cards. */
+  flex: 1 1 auto;
   margin: 0;
   min-width: 0;
   color: #fff;
@@ -378,6 +381,9 @@ body .taxonomy-section .media-shell-header .technical-label {
     grid-template-columns: 1fr;
   }
   .roadmap-spine { display: none; }
+  /* The min-height only exists to level the five cards against each other
+     across one row; stacked, it is just dead space under every card. */
+  .roadmap-node { min-height: 0; }
 }
 
 @media (max-width: 680px) {

@@ -329,9 +329,14 @@ body .architecture-shell.media-shell {
   }
 
   /* Back control, in the shell's own header bar rather than as new chrome
-     inside the workspace (which the docked band already occupies). */
+     inside the workspace (which the docked band already occupies). It is
+     labelled with the section's own name, so the header's separate label
+     stands down while it is showing — one name per bar, not two. */
   .media-shell.is-detail .media-shell-header .shell-back {
     display: inline-flex !important;
+  }
+  .media-shell.is-detail .media-shell-header .technical-label {
+    display: none !important;
   }
 }
 
