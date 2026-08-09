@@ -5,7 +5,7 @@
    refinements-v4.css so it can be the deciding layer without needing to
    touch those files' own (still-valid) rules. */
 
-/* Desktop proportion is explicitly 20 / 80 for all three explorers. */
+/* Desktop proportion is explicitly 20 / 80 for the two article explorers. */
 @media (min-width: 681px) {
   #architectureWorkspace,
   #missionWorkspace,
@@ -14,6 +14,13 @@
     grid-template-columns: 20% 80% !important;
     gap: 0 !important;
     padding: 0 !important;
+  }
+  /* SYSTEM ARCHITECTURE reads the other way round: the left pane carries
+     the whole component — index and specification text together — and the
+     right pane is given over to the vehicle render, so the text column
+     takes the majority of the width. */
+  #architectureWorkspace {
+    grid-template-columns: 62% 38% !important;
   }
   #architectureWorkspace > .media-index-pane,
   #missionWorkspace > .media-index-pane,
@@ -62,6 +69,72 @@
 }
 #mediaHeroAmbient {
   display: none !important;
+}
+
+/* ---------- System Architecture: index + text left, vehicle right ------ */
+#architectureWorkspace > .media-index-pane {
+  display: flex !important;
+  flex-direction: column !important;
+  min-height: 0 !important;
+  overflow: hidden !important;
+}
+/* The index keeps its natural height; the specification text takes the
+   rest of the column and scrolls on its own. */
+#architectureWorkspace #oryxList {
+  flex: 0 0 auto !important;
+}
+#architectureWorkspace .media-article-pane {
+  flex: 1 1 auto !important;
+  min-height: 0 !important;
+  display: flex !important;
+  flex-direction: column !important;
+}
+#architectureWorkspace .media-article-scroll {
+  flex: 1 1 auto !important;
+  min-height: 0 !important;
+  overflow-y: auto !important;
+}
+/* The band reserves its space against the article pane, which now lives in
+   the left column rather than inside .media-stage. */
+#architectureWorkspace.has-transfer-band .media-article-pane {
+  box-sizing: border-box !important;
+  padding-top: var(--transfer-band-reserve, 64px) !important;
+}
+
+/* The single vehicle render on the homepage, stood upright.
+   assets/images/R1V5.png is a 5000x1000 horizontal frame, so it is rotated
+   a quarter turn to stand the launcher on its tail. A rotation does not
+   change the element's layout box, so the box is given the pane's
+   dimensions SWAPPED (container query units: 100cqh wide by 100cqw tall) —
+   once turned, it lands exactly on the pane, and object-fit keeps the
+   render whole inside it. */
+#architectureWorkspace > .media-stage {
+  display: flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  overflow: hidden !important;
+  container-type: size;
+}
+.architecture-vehicle {
+  margin: 0;
+  padding: 0;
+  width: 100%;
+  height: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.architecture-vehicle img {
+  display: block;
+  /* Fallback for engines without container query units. */
+  width: 100%;
+  height: 100%;
+  width: 100cqh;
+  height: 100cqw;
+  max-width: none;
+  max-height: none;
+  object-fit: contain;
+  transform: rotate(-90deg);
 }
 
 /* ---------- System Architecture spec composition ---------- */
@@ -196,6 +269,14 @@
   display: none !important;
 }
 
+/* MISSION is withheld for now: its nav entry and its modal are both taken
+   out of reach. Content and behaviour are left intact, so restoring it is
+   a matter of deleting this block. */
+header nav button[onclick*="mission-modal"],
+#mission-modal {
+  display: none !important;
+}
+
 /* Outer workspace shells (SYSTEM ARCHITECTURE / MISSION / UPDATES) stay
    plain rectangles — only the rubricator rows and the docked heading keep
    the chamfered-corner facet language. transfer-band-v3.css's and
@@ -326,6 +407,39 @@ body .architecture-shell.media-shell {
   #mediaWorkspace .media-index-item-arrow {
     display: block !important;
     align-self: center !important;
+  }
+
+  /* SYSTEM ARCHITECTURE opts out of the drill-down. Its index and its text
+     now live in the same pane, so there is no second level to drill into —
+     the two panes simply stack, text above and the vehicle render below. */
+  #architectureWorkspace {
+    display: flex !important;
+    flex-direction: column !important;
+  }
+  #architectureWorkspace > .media-index-pane,
+  #architectureWorkspace.is-detail > .media-index-pane,
+  #architectureWorkspace > .media-stage,
+  #architectureWorkspace.is-detail > .media-stage {
+    position: relative !important;
+    inset: auto !important;
+    display: flex !important;
+  }
+  #architectureWorkspace > .media-index-pane {
+    flex: 1 1 auto !important;
+    min-height: 0 !important;
+  }
+  #architectureWorkspace > .media-stage {
+    flex: 0 0 34% !important;
+    min-height: 0 !important;
+  }
+  .architecture-shell .shell-back {
+    display: none !important;
+  }
+  .media-shell.architecture-shell.is-detail .media-shell-header .technical-label {
+    display: inline-flex !important;
+  }
+  #architectureWorkspace .transfer-card {
+    display: block !important;
   }
 
   /* Back control, in the shell's own header bar rather than as new chrome

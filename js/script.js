@@ -165,10 +165,22 @@
 
             const stage = this.frame.querySelector('.media-stage');
             const stageRect = stage ? stage.getBoundingClientRect() : frameRect;
+
+            /* On the narrow layout the band docks onto the article it heads,
+               so it is measured against the article pane rather than the
+               stage. For Mission and Updates the pane fills the stage and the
+               two are the same box; for SYSTEM ARCHITECTURE, whose article
+               now sits in the left-hand pane while the stage holds only the
+               vehicle render, they are not — measuring the stage there put
+               the heading over the rocket instead of over its own text. */
+            const articlePane = this.frame.querySelector('.media-article-pane');
+            const paneRect = articlePane ? articlePane.getBoundingClientRect() : null;
+            const hostRect = (paneRect && paneRect.width > 0 && paneRect.height > 0) ? paneRect : stageRect;
+
             const stacked = TransferCardController.stackedLayout();
-            const dockX = stacked ? (stageRect.left - frameRect.left) : 0;
-            const dockY = stacked ? (stageRect.top - frameRect.top) : topInset;
-            const dockWidth = stacked ? stageRect.width : frameRect.width;
+            const dockX = stacked ? (hostRect.left - frameRect.left) : 0;
+            const dockY = stacked ? (hostRect.top - frameRect.top) : topInset;
+            const dockWidth = stacked ? hostRect.width : frameRect.width;
 
             /* Measured relative to the frame first, since that's the common
                coordinate space for both the scroll/body padding lookup and
@@ -320,6 +332,14 @@
             card.style.width = start.width + 'px';
             card.style.height = start.height + 'px';
 
+            /* Claim the band's space the moment the band exists, not when it
+               finishes flying. finish() alone left the article unpadded for
+               the length of the animation — and for as long as a loaded main
+               thread delayed the timers behind it — so the opening lines of
+               the article sat underneath the band. finish() refines this to
+               the landed height once the label's wrapping is known. */
+            this._reserveBandSpace(start.height);
+
             label.textContent = text;
             label.style.left = start.labelX + 'px';
             label.style.top = start.labelY + 'px';
@@ -419,12 +439,13 @@
            selectCatalogueItem — the ONE lifecycle shared by Mission, Updates and
            System Architecture:
 
-             1. cancel whatever this controller is currently doing;
-             2. restore the previously-selected row's label immediately (it is
-                structurally present the whole time — only its text was hidden);
-             3. scroll the catalogue (real scrollTop, item order never changes)
+             1. cancel whatever this controller is currently doing, while
+                leaving the current selection standing;
+             2. scroll the catalogue (real scrollTop, item order never changes)
                 until the clicked row is the first visible row;
-             4. only then transfer that row's title into the band on the right.
+             3. only then transfer that row's title into the band on the right,
+                which is where the old selection is released and the new one
+                installed — as one step, so there is no moment with neither.
 
            A single controller.generation token guards both phases, so a second
            click while a scroll or transfer is still in flight cancels it
@@ -462,13 +483,36 @@
                 const duration = Math.max(150, Math.min(340, Math.abs(distance) * 0.42));
                 const start = performance.now();
 
+                /* requestAnimationFrame only fires while the page is actually
+                   producing frames. A throttled or unpainted tab can withhold
+                   them for as long as it likes, and the transfer waits on this
+                   promise — so a timer, which keeps running regardless, backs
+                   the animation and settles it if the frames never arrive.
+                   Whichever gets there first wins; `settled` keeps the loser
+                   from resolving twice. */
+                let settled = false;
+                const settle = function (value) {
+                    if (settled) return;
+                    settled = true;
+                    clearTimeout(safety);
+                    resolve(value);
+                };
+
                 const tick = function (now) {
-                    if (token !== controller.generation) { resolve(false); return; }
+                    if (settled) return;
+                    if (token !== controller.generation) { settle(false); return; }
                     const t = Math.min(1, (now - start) / duration);
                     list.scrollTop = from + distance * easeOutQuart(t);
                     if (t < 1) requestAnimationFrame(tick);
-                    else { list.scrollTop = target; resolve(true); }
+                    else { list.scrollTop = target; settle(true); }
                 };
+
+                const safety = setTimeout(function () {
+                    if (token !== controller.generation) { settle(false); return; }
+                    list.scrollTop = target;
+                    settle(true);
+                }, duration + 120);
+
                 requestAnimationFrame(tick);
             });
         }
@@ -476,15 +520,16 @@
         function selectCatalogueItem(controller, list, row, index, text, prepareContent, immediate) {
             if (!controller || !row) return;
 
+            /* Cancel whatever is in flight, but do NOT tear the current
+               selection down here. Dismantling it up front — unblanking its
+               row, hiding the band, dropping the reserved space — and only
+               rebuilding once the scroll lands means any scroll that never
+               lands (superseded by the next pick, or starved of frames while
+               the tab is throttled) leaves the explorer with no heading, no
+               selection and the previous article's body still on screen, with
+               no way back to it. Everything the old selection owns stays
+               owned until transferTo swaps it out in one go. */
             controller._cancelActive();
-            controller._restorePreviousLabel();
-            if (controller.card) controller.card.style.display = 'none';
-            if (controller.frame) {
-                controller.frame.classList.remove('has-transfer-band');
-                controller.frame.style.removeProperty('--transfer-band-reserve');
-            }
-            controller.dockedIndex = null;
-            controller.dockedRow = null;
 
             const token = controller.generation;
             const proceed = function () {
@@ -492,31 +537,37 @@
                 controller.transferTo(row, index, text, prepareContent, immediate);
             };
 
-            /* Wide layout: the index and the article share the screen, so the
-               picked row scrolls up into the top slot the band then rises out
-               of, and the transfer waits for that scroll to land.
+            /* The pick is applied NOW, and the catalogue scrolls alongside it
+               rather than in front of it.
 
-               Narrow layout: the pick drills into a detail view that replaces
-               the index entirely (see enterDetail), so there is no top slot to
-               scroll to and nothing for a wait to protect — it would only open
-               a ~150-340ms window with the band and article torn down and
-               nothing drawn yet, which read as the heading vanishing. Update
-               straight away instead, and just keep the picked row in view for
-               when the reader comes back to the index. */
-            if (immediate || !list) {
-                proceed();
-                return;
-            }
+               Waiting for the scroll before swapping the article read well on
+               an idle machine and failed on a busy one: the animation is
+               driven by frames, the page runs five animated WebGL world maps,
+               and when the main thread is saturated those frames — and the
+               timers backing them — arrive hundreds of milliseconds late or
+               after the reader has already clicked something else. The
+               transfer was gated on that, so a pick could simply not happen,
+               and the article stayed on the previous entry.
+
+               Correctness must not depend on animation timing. The band's
+               flight now starts from wherever the row currently is (which is
+               where the reader just clicked, so it reads naturally) while the
+               list scrolls that row up to the top slot underneath it. Both
+               end in the same place, and a scroll that is slow, starved or
+               superseded can no longer cost the reader the selection. */
+            proceed();
+
+            if (immediate || !list) return;
 
             if (TransferCardController.stackedLayout()) {
-                proceed();
                 if (typeof row.scrollIntoView === 'function') row.scrollIntoView({ block: 'nearest' });
                 return;
             }
 
-            scrollRowToTop(list, row, controller, token).then(function (ok) {
-                if (ok) proceed();
-            });
+            /* transferTo bumps the generation as it takes ownership, so the
+               scroll is tokened against the state it leaves behind — that is
+               what lets the NEXT pick abort this scroll mid-flight. */
+            scrollRowToTop(list, row, controller, controller.generation);
         }
 
         const architectureTransfer = new TransferCardController({
@@ -1171,10 +1222,10 @@
                 const entry = ARCHITECTURE_ENTRIES[index];
                 if (!entry) return;
                 stage.classList.add('has-article');
-                const visual = entry.image
-                    ? `<figure class="architecture-spec-visual"><img src="${entry.image}" alt="${entry.imageAlt || entry.name}"></figure>`
-                    : '';
-                text.innerHTML = `<div class="architecture-spec-layout">${visual}<div class="architecture-spec-copy">${entry.html}</div></div>`;
+                /* The homepage carries one vehicle render only — the vertical
+                   R1v5 standing in the right-hand pane (see index.html). Per
+                   entry renders are not emitted here any more. */
+                text.innerHTML = `<div class="architecture-spec-layout"><div class="architecture-spec-copy">${entry.html}</div></div>`;
                 list.querySelectorAll('button[data-architecture-index]').forEach(button => {
                     const active = Number(button.dataset.architectureIndex) === index;
                     button.classList.toggle('is-active', active);

@@ -25,10 +25,13 @@ body .aspire-hero .hero-headline {
 }
 
 /* FACET LANGUAGE: upper corners only, with the cut explicitly stroked.
-   .section-bar (the PROGRAM NETWORK / ROADMAP header bars) is intentionally
-   left out of this group — a plain bar with no chamfer stroke there. */
+   Facets belong to what sits INSIDE a frame — rubricator rows, the transfer
+   band, roadmap and partner cards. The frames themselves stay rectangular,
+   so .media-shell-header (the MISSION / UPDATES / SYSTEM ARCHITECTURE title
+   bar) and .section-bar (PROGRAM NETWORK / ROADMAP) are both left out: the
+   header's own chamfered plate read as a second backing stacked inside the
+   panel's edge. */
 .transfer-card.transfer-band-v3,
-.media-shell-header,
 .roadmap-node,
 .partner-card,
 .partners-shell,
@@ -39,7 +42,6 @@ body .aspire-hero .hero-headline {
 }
 
 .transfer-card.transfer-band-v3,
-.media-shell-header,
 .roadmap-node,
 .partner-card,
 .partners-shell {
@@ -51,8 +53,6 @@ body .aspire-hero .hero-headline {
 
 .transfer-card.transfer-band-v3::before,
 .transfer-card.transfer-band-v3::after,
-.media-shell-header::before,
-.media-shell-header::after,
 .roadmap-node::before,
 .roadmap-node::after,
 .partner-card::before,
@@ -68,7 +68,6 @@ body .aspire-hero .hero-headline {
   pointer-events: none;
 }
 .transfer-card.transfer-band-v3::before,
-.media-shell-header::before,
 .roadmap-node::before,
 .partner-card::before,
 .partners-shell::before {
@@ -78,7 +77,6 @@ body .aspire-hero .hero-headline {
   transform-origin: left center;
 }
 .transfer-card.transfer-band-v3::after,
-.media-shell-header::after,
 .roadmap-node::after,
 .partner-card::after,
 .partners-shell::after {
