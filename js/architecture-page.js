@@ -1,13 +1,27 @@
 (() => {
+  const VEHICLE_ASSET_MAP = {
+    'assets/images/system/R1V5.avif': 'R1V5.png',
+    'assets/images/system/Fairings_2.avif': 'Fairings_2.png',
+    'assets/images/system/S2_5.avif': 'S2_5.png'
+  };
+
+  /* architecture.html predates the final vertical renders. Rewrite every
+     static vehicle image at startup so the page and the interactive hero use
+     the same canonical PNG assets without duplicating vehicle artwork. */
+  document.querySelectorAll('img').forEach(img => {
+    const src = img.getAttribute('src');
+    if (src && VEHICLE_ASSET_MAP[src]) img.setAttribute('src', VEHICLE_ASSET_MAP[src]);
+  });
+
   const HERO_CONFIG = {
     oryx: {
-      image: 'assets/images/system/R1V5.avif',
+      image: 'R1V5.png',
       alt: 'Oryx fully reusable transportation system: R1v5 booster with D3 spacecraft',
       title: 'ORYX',
       role: 'LAUNCH / ORBITAL OPERATIONS / RETURN'
     },
     launcher: {
-      image: 'assets/images/system/Fairings_2.avif',
+      image: 'Fairings_2.png',
       alt: 'Aspire Launcher: reusable booster with payload fairing',
       title: 'LAUNCHER',
       role: 'DEDICATED PAYLOAD DELIVERY'
