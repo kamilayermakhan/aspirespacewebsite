@@ -1,10 +1,11 @@
-/* Aspire Space — stitched cross background inspired by the supplied motion reference.
-   This layer changes ONLY the page background treatment. Existing dark boxes,
-   menus, media panels and their colors stay intact. */
+/* Aspire Space — interactive halftone material background reconstructed from
+   the supplied motion reference + Figma capture. This layer changes ONLY the
+   page background treatment. Existing dark boxes, menus and panel colors stay
+   intact. */
 
 :root {
-  --stitch-paper: #f4f4f1;
-  --stitch-ink: #5f6065;
+  --stitch-paper: #ffffff;
+  --stitch-ink: #302f34;
   --stitch-accent: #625176;
 }
 
@@ -13,8 +14,8 @@ body {
   background: var(--stitch-paper) !important;
 }
 
-/* Retire the previous world-map / rhombus background visually without
-   disturbing the existing JS that may still initialise those canvases. */
+/* Retire the old world-map / rhombus renderer visually without disturbing
+   unrelated controllers that may still initialise their canvases. */
 #dither-gl,
 .media-background-map,
 .media-idle-map,
@@ -44,8 +45,8 @@ body {
   background: var(--stitch-paper);
 }
 
-/* Keep normal page surfaces above the material background. Modal positioning
-   is deliberately untouched — Tailwind's fixed positioning remains authoritative. */
+/* Normal site surfaces remain above the material layer. Panel/menu colors and
+   modal positioning are deliberately left untouched. */
 body > header,
 body > main,
 body > section,
@@ -53,15 +54,13 @@ body > footer {
   position: relative;
 }
 
-/* The hero is not a dark box, so its semantic text needs the same dark ink
-   used by the reference on the new paper background. No panel/menu colors
-   are changed here. */
+/* The hero itself is not a dark panel, so its type remains readable on paper. */
 .aspire-hero .hero-headline,
 .aspire-hero .hero-subtitle {
   color: #252427 !important;
 }
 
-/* Ensure the Oryx image remains visually independent on the pale field. */
+/* Keep the Oryx render independent on the pale field. */
 #architectureWorkspace > .media-stage,
 #architectureWorkspace.is-detail > .media-stage,
 .architecture-vehicle {
@@ -70,7 +69,6 @@ body > footer {
 
 @media (prefers-reduced-motion: reduce) {
   #stitch-bg {
-    /* The pattern remains, only cursor/trail interpolation is disabled in JS. */
     transform: none !important;
   }
 }
