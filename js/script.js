@@ -94,14 +94,18 @@
         };
 
         /* Geometry for one card: where it starts (the clicked row) and where it
-           docks. On the desktop/tablet side-by-side layout the rubricator and
-           the stage share the same top edge, so a full-width band at the top
-           of the frame reads as both at once. On the stacked mobile layout
-           they no longer share that edge — the rubricator sits above the
-           stage — so the band docks at the top of the stage instead, landing
-           directly above the article photo rather than over the list.
-           Measured fresh every call — nothing here is hardcoded per item or
-           per index. */
+           docks. On the wide side-by-side layout the band spans the whole
+           frame, at the same top edge the rubricator and the stage already
+           share, and relies on the row directly underneath being the blank,
+           just-scrolled-to-top one so nothing shows through. On the narrow
+           rail layout (stackedLayout()) — used by SYSTEM ARCHITECTURE at
+           every width and by MISSION/UPDATES under 680px — the rail is a
+           persistent side column rather than something rows scroll past
+           underneath the band, so the band is confined to the stage
+           column's own bounds instead: it can never overlap the rail, so
+           the rail's rows stay fully visible (see transferTo, which skips
+           blanking the source row there for the same reason). Measured
+           fresh every call — nothing here is hardcoded per item or index. */
         TransferCardController.prototype._measureBand = function (row) {
             if (!this.frame || !row) return null;
 
@@ -114,19 +118,37 @@
 
             const stage = this.frame.querySelector('.media-stage');
             const stageRect = stage ? stage.getBoundingClientRect() : frameRect;
-            const dockY = TransferCardController.stackedLayout() ? (stageRect.top - frameRect.top) : topInset;
+            const stacked = TransferCardController.stackedLayout();
+            const dockX = stacked ? (stageRect.left - frameRect.left) : 0;
+            const dockY = stacked ? (stageRect.top - frameRect.top) : topInset;
+            const dockWidth = stacked ? stageRect.width : frameRect.width;
 
+            /* Measured relative to the frame first, since that's the common
+               coordinate space for both the scroll/body padding lookup and
+               the stage rect. The card itself docks at dockX, and the label
+               is a child of the card (see _ensureCard) — so what actually
+               gets assigned to label.style.left must be relative to the
+               card's own left edge, not the frame's, or the two offsets
+               stack and push the label past the card's right edge entirely
+               once dockX is non-zero (the narrow-rail layout). */
             const scroll = this.frame.querySelector('.media-article-scroll');
             const body = this.frame.querySelector('.media-article-body');
-            let labelX;
+            let labelXInFrame;
             if (scroll) {
                 const scrollRect = scroll.getBoundingClientRect();
                 const scrollCS = getComputedStyle(scroll);
                 const bodyCS = body ? getComputedStyle(body) : null;
-                labelX = scrollRect.left - frameRect.left + px(scrollCS.paddingLeft) + (bodyCS ? px(bodyCS.paddingLeft) : 0);
+                labelXInFrame = scrollRect.left - frameRect.left + px(scrollCS.paddingLeft) + (bodyCS ? px(bodyCS.paddingLeft) : 0);
             } else {
-                labelX = stageRect.left - frameRect.left + 18;
+                labelXInFrame = stageRect.left - frameRect.left + 18;
             }
+
+            /* The label's docked width is the room actually available at the
+               dock, not the source row's — the row lives in a narrow rail
+               (especially on the stacked/narrow layout), so reusing its width
+               at the destination wrapped long headlines one word per line. */
+            const dockLabelWidth = Math.max(1, (dockX + dockWidth) - labelXInFrame - 16);
+            const labelX = labelXInFrame - dockX;
 
             return {
                 start: {
@@ -139,7 +161,7 @@
                     labelWidth: labelRect.width,
                     labelHeight: labelRect.height
                 },
-                dock: { x: 0, y: dockY, width: frameRect.width, labelX: labelX }
+                dock: { x: dockX, y: dockY, width: dockWidth, labelX: labelX, labelWidth: dockLabelWidth }
             };
         };
 
@@ -158,7 +180,7 @@
             const m = this._measureBand(this.dockedRow);
             if (!m) return;
             this.card.style.transform = '';
-            this.card.style.left = '0px';
+            this.card.style.left = m.dock.x + 'px';
             this.card.style.top = m.dock.y + 'px';
             this.card.style.width = m.dock.width + 'px';
             this.card.style.height = m.start.height + 'px';
@@ -263,16 +285,27 @@
             const finish = function () {
                 if (token !== self.generation) return;
                 card.style.transform = '';
-                card.style.left = '0px';
+                card.style.left = dock.x + 'px';
                 card.style.top = dock.y + 'px';
                 card.style.width = dock.width + 'px';
-                card.style.height = start.height + 'px';
+
+                /* The label's width at the dock can be much wider (or, on the
+                   narrow rail layout, sometimes narrower) than it was on the
+                   source row, so its wrapped line count — and therefore the
+                   band's height — isn't known until it's actually laid out at
+                   that width. Measure it live instead of reusing the source
+                   row's height. */
                 label.style.left = dock.labelX + 'px';
+                label.style.width = Math.max(dock.labelWidth, 1) + 'px';
+                label.style.height = 'auto';
+                const labelHeight = Math.max(label.scrollHeight, start.labelHeight, 1);
+                const cardHeight = Math.max(start.height, labelHeight + start.labelY * 2);
+
+                card.style.height = cardHeight + 'px';
                 label.style.top = start.labelY + 'px';
-                label.style.width = Math.max(start.labelWidth, 1) + 'px';
-                label.style.height = Math.max(start.labelHeight, 1) + 'px';
+                label.style.height = labelHeight + 'px';
                 label.style.opacity = '1';
-                self._reserveBandSpace(start.height);
+                self._reserveBandSpace(cardHeight);
                 self.animations = [];
                 self.timers = [];
             };

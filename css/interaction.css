@@ -190,32 +190,57 @@
   display: none !important;
 }
 
-/* ---------- Mobile: Mission / Updates stack the rubricator above the
-   article instead of side-by-side columns. A pre-existing rule
-   (`.media-workspace > aside, section { position: relative }`, plus a
-   `.mission-shell` override) already defeats this file's ancestor's
-   old absolute-swap mobile layout, so the rubricator pane never gets a
-   bounded height and its list can't really scroll — the docked band then
-   lands on the still-visible first row instead of the blank one. Give the
-   workspace a real flex column so the list gets a genuinely bounded,
-   scrollable box, matching how the desktop grid already stretches it. */
+/* Homepage PROGRAM NETWORK / partners section: removed from both desktop
+   and mobile. Data/rendering left intact — only display is suppressed. */
+.partners-section {
+  display: none !important;
+}
+
+/* Outer workspace shells (SYSTEM ARCHITECTURE / MISSION / UPDATES) stay
+   plain rectangles — only the rubricator rows and the docked heading keep
+   the chamfered-corner facet language. transfer-band-v3.css's and
+   styles.css's .media-shell rules both clip a corner (and styles.css adds
+   an offset outline on top), which on a wide shell produces a stray
+   diagonal seam where the outline and the clipped corner don't line up. */
+.media-shell,
+body .architecture-shell.media-shell {
+  clip-path: none !important;
+  outline: none !important;
+}
+
+/* ---------- Mobile: Mission / Updates use the same narrow-rail-beside-
+   stage layout SYSTEM ARCHITECTURE already uses at every width (see
+   .architecture-workspace, styles.css), instead of stacking the rubricator
+   above the article. Keeps the rubricator "on the side" so it is easy to
+   flip through while the article opens beside it, and its chamfered rows
+   stay visible (see TransferCardController.transferTo, which only skips
+   blanking the source row on this stacked/narrow layout). */
 @media (max-width: 680px) {
   #missionWorkspace,
   #mediaWorkspace {
     display: flex !important;
-    flex-direction: column !important;
+    flex-direction: row !important;
   }
   #missionWorkspace > .media-index-pane,
   #mediaWorkspace > .media-index-pane {
-    flex: 0 1 44% !important;
-    max-height: 44% !important;
-    min-height: 0 !important;
+    flex: 0 0 clamp(140px, 42%, 220px) !important;
+    min-width: 0 !important;
+    max-height: none !important;
   }
   #missionWorkspace > .media-stage,
   #mediaWorkspace > .media-stage {
     flex: 1 1 auto !important;
-    min-height: 0 !important;
-    overflow-y: auto !important;
-    display: block !important;
+    min-width: 0 !important;
+  }
+  /* Mission/Updates titles are full sentences, not short labels like
+     SYSTEM ARCHITECTURE's, so they wrap onto several lines on this narrow
+     rail — a slightly wider rail (above) keeps that readable without
+     needing to clamp/truncate them. (-webkit-line-clamp was tried here and
+     rejected: combined with .media-index-item's grid layout it produced
+     overlapping, garbled text rather than a clean truncation.) */
+  #missionWorkspace .media-index-item-title,
+  #mediaWorkspace .media-index-item-title {
+    font-size: 12.5px !important;
+    line-height: 1.35 !important;
   }
 }
