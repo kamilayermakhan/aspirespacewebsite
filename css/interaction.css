@@ -1,470 +1,678 @@
-/* Aspire interaction consolidation.
-   Single home for the layout/behaviour rules the Transfer Band + rolodex
-   catalogue interaction needs across SYSTEM ARCHITECTURE, MISSION and
-   UPDATES. Loaded after styles.css, transfer-band-v3.css and
-   refinements-v4.css so it can be the deciding layer without needing to
-   touch those files' own (still-valid) rules. */
+/* Aspire Space — final interaction/layout overrides.
+   Loaded last. This layer intentionally owns only:
+   1) the Aspen-reference-inspired moving diamond-map presentation,
+   2) the homepage SYSTEM ARCHITECTURE composition,
+   3) persistent, returnable UPDATES navigation,
+   4) temporary MISSION suppression.
+*/
 
-/* Desktop proportion is explicitly 20 / 80 for the two article explorers. */
-@media (min-width: 681px) {
-  #architectureWorkspace,
-  #missionWorkspace,
-  #mediaWorkspace {
-    display: grid !important;
-    grid-template-columns: 20% 80% !important;
-    gap: 0 !important;
-    padding: 0 !important;
+/* ============================================================
+   01 / DIAMOND WORLD-MAP FIELD
+   The WebGL renderer already draws the continents from rhombus cells.
+   The reference behaviour is recreated here as a slow coherent field:
+   the whole raster breathes by a few percent while broad density bands
+   travel across it. The map never behaves like random glitter.
+   ============================================================ */
+
+@keyframes aspireDiamondFieldDrift {
+  0% {
+    transform: translate3d(-1.4%, .5%, 0) scale(1.035);
+    opacity: .42;
+    filter: contrast(.96) brightness(.90);
   }
-  /* SYSTEM ARCHITECTURE reads the other way round: the left pane carries
-     the whole component — index and specification text together — and the
-     right pane is given over to the vehicle render, so the text column
-     takes the majority of the width. */
-  #architectureWorkspace {
-    grid-template-columns: 62% 38% !important;
+  32% {
+    transform: translate3d(.2%, -1.0%, 0) scale(1.055);
+    opacity: .53;
+    filter: contrast(1.08) brightness(1.02);
   }
-  #architectureWorkspace > .media-index-pane,
-  #missionWorkspace > .media-index-pane,
-  #mediaWorkspace > .media-index-pane {
-    flex: none !important;
-    width: auto !important;
-    min-width: 0 !important;
+  68% {
+    transform: translate3d(1.25%, .35%, 0) scale(1.045);
+    opacity: .46;
+    filter: contrast(1.02) brightness(.96);
   }
-  #architectureWorkspace > .media-stage,
-  #missionWorkspace > .media-stage,
-  #mediaWorkspace > .media-stage {
-    min-width: 0 !important;
+  100% {
+    transform: translate3d(-.35%, 1.0%, 0) scale(1.06);
+    opacity: .56;
+    filter: contrast(1.10) brightness(1.03);
   }
 }
 
-/* The catalogue itself must be able to really scroll (scrollTop-driven, not
-   a translateY illusion) so any row — including the last one — can reach the
-   first-visible-row slot via a bottom padding reserve computed at click
-   time. Updates previously forced `overflow-y: visible`, which blocked
-   scrolling entirely. */
-#media-modal #mediaList,
-#mission-modal #missionList,
-#architectureWorkspace #oryxList {
-  overflow-y: auto !important;
-  overscroll-behavior: contain;
-  scroll-behavior: auto !important;
+@keyframes aspireDiamondDensitySweep {
+  0%   { transform: translate3d(-24%, -7%, 0) rotate(-2deg); opacity: .18; }
+  45%  { opacity: .42; }
+  100% { transform: translate3d(24%, 7%, 0) rotate(2deg); opacity: .20; }
 }
 
-/* Update photographs and Architecture renders keep their current width but
-   use their intrinsic aspect ratio instead of being forced into the
-   shallow fixed-height viewport meant for the marquee/press imagery. */
-#mediaArticlePane .media-article-visual {
+#dither-gl,
+.media-background-map,
+.media-idle-map,
+#architectureBackgroundGl,
+#mediaBackgroundGl,
+#mediaDitherGl,
+#missionBackdropGl,
+#missionDitherGl {
+  transform-origin: 50% 50%;
+  will-change: transform, opacity, filter;
+  animation: aspireDiamondFieldDrift 17s cubic-bezier(.45,0,.25,1) infinite alternate !important;
+}
+
+/* Give the drifting raster enough overscan that its edges never enter view. */
+#dither-gl {
+  inset: -4% !important;
+  width: 108% !important;
+  height: 108% !important;
+  max-width: none !important;
+  max-height: none !important;
+}
+.media-background-map,
+.media-idle-map {
+  inset: -5% !important;
+  width: 110% !important;
+  height: 110% !important;
+  max-width: none !important;
+  max-height: none !important;
+}
+
+/* Aspen-like density modulation: a broad travelling veil changes which
+   parts of the rhombus field read strongly without moving the UI itself. */
+#mediaWorkspace,
+#missionWorkspace {
+  position: relative !important;
+  isolation: isolate;
+}
+#mediaWorkspace::after,
+#missionWorkspace::after {
+  content: '';
+  position: absolute;
+  z-index: 1;
+  inset: -18% -28%;
+  pointer-events: none;
+  background:
+    radial-gradient(ellipse 24% 42% at 28% 44%, rgba(255,255,255,.12), transparent 72%),
+    radial-gradient(ellipse 21% 36% at 67% 58%, rgba(255,255,255,.085), transparent 74%),
+    linear-gradient(104deg, transparent 18%, rgba(255,255,255,.055) 34%, transparent 51%, rgba(255,255,255,.035) 67%, transparent 82%);
+  mix-blend-mode: screen;
+  animation: aspireDiamondDensitySweep 19s cubic-bezier(.42,0,.25,1) infinite alternate;
+}
+#mediaWorkspace > *,
+#missionWorkspace > * {
+  position: relative;
+  z-index: 2;
+}
+#mediaWorkspace > .media-background-map,
+#missionWorkspace > .media-background-map {
+  position: absolute !important;
+  z-index: 0 !important;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  #dither-gl,
+  .media-background-map,
+  .media-idle-map,
+  #architectureBackgroundGl,
+  #mediaBackgroundGl,
+  #mediaDitherGl,
+  #missionBackdropGl,
+  #missionDitherGl,
+  #mediaWorkspace::after,
+  #missionWorkspace::after {
+    animation: none !important;
+    transform: none !important;
+  }
+}
+
+/* ============================================================
+   02 / HOMEPAGE — SYSTEM ARCHITECTURE
+   The explanation is one compact object on the left.
+   R1V5.png is a separate visual object outside that explanatory block.
+   There is deliberately no right-hand card/pane around the rocket.
+   ============================================================ */
+
+.taxonomy-section {
+  position: relative !important;
+  overflow: visible !important;
+  min-height: clamp(610px, 72vh, 800px) !important;
+  padding-top: clamp(24px, 3vw, 42px) !important;
+}
+
+body .architecture-shell.media-shell {
+  position: relative !important;
+  overflow: visible !important;
   width: 100% !important;
+  height: auto !important;
+  min-height: 0 !important;
+  max-height: none !important;
+  padding: 0 !important;
+  border: 0 !important;
+  outline: 0 !important;
+  clip-path: none !important;
+  background: transparent !important;
+  box-shadow: none !important;
+}
+
+/* Only the label + left explanatory pane form the SYSTEM block. */
+.architecture-shell > .media-shell-header {
+  width: min(47%, 590px) !important;
+  min-height: 42px !important;
+  padding: 0 17px !important;
+  border: 1px solid rgba(255,255,255,.26) !important;
+  border-bottom: 0 !important;
+  background: rgba(29,27,39,.91) !important;
+  backdrop-filter: blur(12px);
+  clip-path: polygon(10px 0, 100% 0, 100% 100%, 0 100%, 0 10px) !important;
+}
+
+#architectureWorkspace,
+#architectureWorkspace.is-detail {
+  position: relative !important;
+  display: block !important;
+  width: 100% !important;
+  height: auto !important;
+  min-height: clamp(555px, 65vh, 720px) !important;
+  padding: 0 !important;
+  overflow: visible !important;
+  background: transparent !important;
+}
+
+#architectureWorkspace > .media-index-pane,
+#architectureWorkspace.is-detail > .media-index-pane {
+  position: relative !important;
+  inset: auto !important;
+  z-index: 4 !important;
+  display: block !important;
+  width: min(47%, 590px) !important;
+  height: auto !important;
+  min-height: 0 !important;
+  max-height: none !important;
+  padding: 0 !important;
+  overflow: visible !important;
+  border: 1px solid rgba(255,255,255,.26) !important;
+  background:
+    linear-gradient(180deg, rgba(255,255,255,.035), rgba(255,255,255,.012)),
+    rgba(25,23,34,.82) !important;
+  backdrop-filter: blur(12px);
+  clip-path: polygon(0 0, 100% 0, 100% calc(100% - 13px), calc(100% - 13px) 100%, 0 100%) !important;
+}
+
+/* Homepage explains Oryx as the complete architecture. Component selection
+   belongs on the technical page, so the three-item catalogue is not shown. */
+#architectureWorkspace #oryxList,
+#architectureWorkspace .transfer-layer,
+#architectureWorkspace #oryxTitle {
+  display: none !important;
+}
+
+#architectureWorkspace .media-article-pane,
+#architectureWorkspace.is-detail .media-article-pane {
+  display: block !important;
+  position: relative !important;
+  inset: auto !important;
+  width: 100% !important;
+  height: auto !important;
+  min-height: 0 !important;
+  padding: 0 !important;
+  opacity: 1 !important;
+  visibility: visible !important;
+  overflow: visible !important;
+}
+
+#architectureWorkspace .media-article-scroll {
   height: auto !important;
   min-height: 0 !important;
   max-height: none !important;
   overflow: visible !important;
 }
-#mediaArticlePane .media-article-visual #mediaHeroImage {
+
+#architectureWorkspace .media-article-header {
+  position: static !important;
+  min-height: 0 !important;
+  padding: 22px 24px 16px !important;
+  border-bottom: 1px solid rgba(255,255,255,.16) !important;
+  background: transparent !important;
+}
+
+/* TransferCardController still writes the selected name here; it is used as
+   a static heading instead of a travelling title. */
+#oryxTitleLive {
+  display: block !important;
+  position: static !important;
+  width: auto !important;
+  height: auto !important;
+  margin: 0 !important;
+  padding: 0 !important;
+  overflow: visible !important;
+  clip: auto !important;
+  clip-path: none !important;
+  white-space: normal !important;
+  opacity: 1 !important;
+  color: #fff !important;
+  font-family: 'Forma DJR','Montserrat',sans-serif !important;
+  font-size: clamp(25px, 2.2vw, 34px) !important;
+  font-weight: 500 !important;
+  line-height: 1.02 !important;
+  letter-spacing: -.028em !important;
+  text-transform: uppercase !important;
+}
+#oryxTitleLive:empty::before { content: 'ORYX ROCKETSHIP'; }
+
+#architectureWorkspace #oryxText {
+  padding: 19px 24px 24px !important;
+  opacity: 1 !important;
+  visibility: visible !important;
+  transform: none !important;
+}
+
+#architectureWorkspace .architecture-spec-layout,
+#architectureWorkspace .architecture-spec-copy {
+  display: block !important;
+  width: 100% !important;
+  max-width: none !important;
+  margin: 0 !important;
+  padding: 0 !important;
+}
+
+#architectureWorkspace .architecture-spec-lead,
+#architectureWorkspace .architecture-spec-kicker {
+  margin: 0 0 18px !important;
+  padding: 0 0 16px !important;
+  border-bottom: 1px solid rgba(255,255,255,.22) !important;
+  color: rgba(255,255,255,.91) !important;
+  font-family: 'Forma DJR','Montserrat',sans-serif !important;
+  font-size: clamp(16px, 1.3vw, 19px) !important;
+  font-weight: 500 !important;
+  line-height: 1.35 !important;
+  letter-spacing: -.01em !important;
+}
+
+#architectureWorkspace .architecture-spec-group {
+  display: grid !important;
+  grid-template-columns: minmax(105px, 30%) minmax(0, 1fr) !important;
+  gap: 12px 16px !important;
+  min-height: 0 !important;
+  margin: 0 !important;
+  padding: 14px 0 !important;
+  border: 0 !important;
+  border-bottom: 1px solid rgba(255,255,255,.13) !important;
+  background: transparent !important;
+}
+#architectureWorkspace .architecture-spec-group:last-child { border-bottom: 0 !important; }
+#architectureWorkspace .architecture-spec-label {
+  margin: 2px 0 0 !important;
+  color: rgba(255,255,255,.48) !important;
+  font-family: 'Martian Mono',monospace !important;
+  font-size: 9px !important;
+  font-weight: 600 !important;
+  line-height: 1.35 !important;
+  letter-spacing: .11em !important;
+}
+#architectureWorkspace .architecture-spec-group p {
+  grid-column: 2 !important;
+  margin: 0 !important;
+  padding: 0 0 7px !important;
+  border: 0 !important;
+  color: rgba(255,255,255,.82) !important;
+  font-family: 'Forma DJR','Montserrat',sans-serif !important;
+  font-size: 14px !important;
+  font-weight: 400 !important;
+  line-height: 1.44 !important;
+}
+#architectureWorkspace .architecture-spec-sublabel {
+  display: block !important;
+  margin: 0 0 3px !important;
+  padding: 0 !important;
+  border: 0 !important;
+  color: rgba(255,255,255,.42) !important;
+  font: 8px/1.3 'Martian Mono',monospace !important;
+  letter-spacing: .08em !important;
+}
+
+/* The stage itself has no chrome. It occupies the open space to the right
+   and therefore reads as a separate object, not as the right half of a card. */
+#architectureWorkspace > .media-stage,
+#architectureWorkspace.is-detail > .media-stage {
+  position: absolute !important;
+  z-index: 3 !important;
+  top: clamp(-62px, -4vw, -30px) !important;
+  right: -1.5% !important;
+  left: auto !important;
+  bottom: auto !important;
+  display: flex !important;
+  align-items: flex-start !important;
+  justify-content: center !important;
+  width: 51% !important;
+  height: clamp(590px, 70vh, 770px) !important;
+  min-width: 0 !important;
+  min-height: 0 !important;
+  padding: 0 !important;
+  overflow: visible !important;
+  border: 0 !important;
+  outline: 0 !important;
+  clip-path: none !important;
+  background: transparent !important;
+  box-shadow: none !important;
+}
+
+.architecture-vehicle {
+  position: relative !important;
+  display: flex !important;
+  align-items: flex-start !important;
+  justify-content: center !important;
+  width: 100% !important;
+  height: 100% !important;
+  margin: 0 !important;
+  padding: 0 !important;
+  overflow: visible !important;
+}
+.architecture-vehicle img,
+#oryxImage {
+  display: block !important;
+  width: auto !important;
+  height: 100% !important;
+  max-width: 92% !important;
+  max-height: 100% !important;
+  margin: 0 auto !important;
+  object-fit: contain !important;
+  object-position: center top !important;
+  transform: none !important;
+  filter: drop-shadow(0 34px 42px rgba(0,0,0,.45)) !important;
+}
+
+/* ============================================================
+   03 / UPDATES — PERSISTENT MASTER / DETAIL
+   No travelling heading, no state that destroys the source row.
+   The index stays available after every article selection, so any previous
+   article can always be reopened. This deliberately overrides is-detail.
+   ============================================================ */
+
+#mediaWorkspace .transfer-layer,
+#mediaWorkspace .transfer-card,
+#media-modal .shell-back {
+  display: none !important;
+}
+
+#mediaWorkspace,
+#mediaWorkspace.is-detail {
+  display: grid !important;
+  grid-template-columns: minmax(250px, 31%) minmax(0, 69%) !important;
+  grid-template-rows: minmax(0, 1fr) !important;
+  gap: 0 !important;
+  position: relative !important;
+  height: 100% !important;
+  min-height: 0 !important;
+  padding: 0 !important;
+  overflow: hidden !important;
+}
+
+#mediaWorkspace > .media-index-pane,
+#mediaWorkspace.is-detail > .media-index-pane {
+  position: relative !important;
+  inset: auto !important;
+  z-index: 3 !important;
+  display: block !important;
+  width: auto !important;
+  min-width: 0 !important;
+  min-height: 0 !important;
+  max-height: none !important;
+  overflow: hidden !important;
+  border-right: 1px solid rgba(255,255,255,.20) !important;
+  opacity: 1 !important;
+  visibility: visible !important;
+}
+
+#mediaWorkspace #mediaList {
+  display: flex !important;
+  flex-direction: column !important;
+  height: 100% !important;
+  max-height: 100% !important;
+  padding-bottom: 32px !important;
+  overflow-y: auto !important;
+  overscroll-behavior: contain;
+  scrollbar-gutter: stable;
+}
+
+/* A title never leaves the catalogue when selected. */
+#mediaWorkspace .media-index-item,
+#mediaWorkspace .media-index-item--transferring,
+#mediaWorkspace .media-index-item--transferring .media-index-item-title,
+#mediaWorkspace .media-index-item--transferring .media-index-item-outlet,
+#mediaWorkspace .media-index-item--transferring * {
+  opacity: 1 !important;
+  visibility: visible !important;
+  text-indent: 0 !important;
+  transform: none !important;
+}
+#mediaWorkspace .media-index-item.is-active {
+  border-color: rgba(255,255,255,.64) !important;
+  background: rgba(255,255,255,.085) !important;
+}
+#mediaWorkspace .media-index-item.is-active .media-index-item-title {
+  color: #fff !important;
+}
+
+#mediaWorkspace > .media-stage,
+#mediaWorkspace.is-detail > .media-stage {
+  position: relative !important;
+  inset: auto !important;
+  z-index: 3 !important;
+  display: block !important;
+  width: auto !important;
+  min-width: 0 !important;
+  min-height: 0 !important;
+  max-height: none !important;
+  overflow: hidden !important;
+  opacity: 1 !important;
+  visibility: visible !important;
+}
+
+#mediaArticlePane.hidden { display: none !important; }
+#mediaArticlePane:not(.hidden) {
+  display: block !important;
+  position: relative !important;
+  height: 100% !important;
+  min-height: 0 !important;
+  padding-top: 0 !important;
+  overflow: hidden !important;
+  opacity: 1 !important;
+  visibility: visible !important;
+  animation: aspireArticleIn .32s cubic-bezier(.2,.7,.2,1) both;
+}
+@keyframes aspireArticleIn {
+  from { opacity: 0; transform: translate3d(0,8px,0); }
+  to   { opacity: 1; transform: translate3d(0,0,0); }
+}
+
+#mediaArticlePane .media-article-scroll {
+  display: block !important;
+  height: 100% !important;
+  max-height: 100% !important;
+  overflow-y: auto !important;
+  overscroll-behavior: contain;
+  opacity: 1 !important;
+  visibility: visible !important;
+  transform: none !important;
+}
+
+#mediaArticlePane .media-article-header {
+  position: static !important;
+  min-height: 0 !important;
+  padding: 20px 22px 18px !important;
+  border-bottom: 1px solid rgba(255,255,255,.17) !important;
+  background: rgba(25,23,34,.62) !important;
+}
+
+/* The old accessibility-only title becomes the real stable article title. */
+#mediaTitle {
+  display: block !important;
+  position: static !important;
+  width: auto !important;
+  height: auto !important;
+  margin: 0 0 9px !important;
+  padding: 0 !important;
+  overflow: visible !important;
+  clip: auto !important;
+  clip-path: none !important;
+  white-space: normal !important;
+  opacity: 1 !important;
+  visibility: visible !important;
+  color: #fff !important;
+  font-family: 'Forma DJR','Montserrat',sans-serif !important;
+  font-size: clamp(24px, 2.15vw, 34px) !important;
+  font-weight: 500 !important;
+  line-height: 1.08 !important;
+  letter-spacing: -.027em !important;
+  text-transform: none !important;
+}
+
+#mediaArticlePane .media-article-visual {
+  position: relative !important;
+  display: block !important;
+  width: 100% !important;
+  height: auto !important;
+  min-height: 0 !important;
+  max-height: none !important;
+  overflow: hidden !important;
+  opacity: 1 !important;
+  visibility: visible !important;
+}
+#mediaArticlePane #mediaHeroImage {
   position: relative !important;
   display: block !important;
   width: 100% !important;
   height: auto !important;
   max-height: none !important;
   object-fit: contain !important;
+  opacity: 1 !important;
+  visibility: visible !important;
+  transform: none !important;
 }
-#mediaHeroAmbient {
-  display: none !important;
+#mediaHeroAmbient { display: none !important; }
+
+#mediaArticlePane #mediaText,
+#mediaArticlePane #mediaText > *,
+#mediaArticlePane .media-article-body {
+  opacity: 1 !important;
+  visibility: visible !important;
+  transform: none !important;
 }
 
-/* ---------- System Architecture: index + text left, vehicle right ------ */
-#architectureWorkspace > .media-index-pane {
-  display: flex !important;
-  flex-direction: column !important;
-  min-height: 0 !important;
-  overflow: hidden !important;
-}
-/* The index keeps its natural height; the specification text takes the
-   rest of the column and scrolls on its own. */
-#architectureWorkspace #oryxList {
-  flex: 0 0 auto !important;
-}
-#architectureWorkspace .media-article-pane {
-  flex: 1 1 auto !important;
-  min-height: 0 !important;
-  display: flex !important;
-  flex-direction: column !important;
-}
-#architectureWorkspace .media-article-scroll {
-  flex: 1 1 auto !important;
-  min-height: 0 !important;
-  overflow-y: auto !important;
-}
-/* The band reserves its space against the article pane, which now lives in
-   the left column rather than inside .media-stage. */
-#architectureWorkspace.has-transfer-band .media-article-pane {
-  box-sizing: border-box !important;
-  padding-top: var(--transfer-band-reserve, 64px) !important;
+#mediaStage.has-article #mediaIdle { display: none !important; }
+#media-modal .media-shell.is-detail .media-shell-header .technical-label {
+  display: inline-flex !important;
 }
 
-/* The single vehicle render on the homepage, stood upright.
-   assets/images/R1V5.png is a 5000x1000 horizontal frame, so it is rotated
-   a quarter turn to stand the launcher on its tail. A rotation does not
-   change the element's layout box, so the box is given the pane's
-   dimensions SWAPPED (container query units: 100cqh wide by 100cqw tall) —
-   once turned, it lands exactly on the pane, and object-fit keeps the
-   render whole inside it. */
-#architectureWorkspace > .media-stage {
-  display: flex !important;
-  align-items: center !important;
-  justify-content: center !important;
-  overflow: hidden !important;
-  container-type: size;
-}
-.architecture-vehicle {
-  margin: 0;
-  padding: 0;
-  width: 100%;
-  height: 100%;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-}
-.architecture-vehicle img {
-  display: block;
-  /* Fallback for engines without container query units. */
-  width: 100%;
-  height: 100%;
-  width: 100cqh;
-  height: 100cqw;
-  max-width: none;
-  max-height: none;
-  object-fit: contain;
-  transform: rotate(-90deg);
-}
+/* ============================================================
+   04 / TEMPORARY VISIBILITY CHOICES
+   ============================================================ */
 
-/* ---------- System Architecture spec composition ---------- */
-.architecture-spec-intro {
-  margin: 0 0 18px !important;
-  color: rgba(255, 255, 255, 0.82);
-  font-family: 'Montserrat', sans-serif !important;
-  font-size: 14px !important;
-  line-height: 1.5 !important;
-}
-
-.architecture-spec-sublabel {
-  display: inline-block;
-  margin-right: 10px;
-  padding-right: 10px;
-  border-right: 1px solid rgba(255, 255, 255, 0.28);
-  color: rgba(255, 255, 255, 0.6);
-  font-family: 'Martian Mono', monospace !important;
-  font-size: 10px !important;
-  font-weight: 700 !important;
-  letter-spacing: 0.1em;
-  text-transform: uppercase;
-}
-
-#architectureWorkspace .architecture-spec-copy {
-  display: grid !important;
-  grid-template-columns: repeat(12, minmax(0, 1fr)) !important;
-  gap: 14px !important;
-  align-items: stretch !important;
-  padding-top: 4px !important;
-  max-width: none !important;
-}
-#architectureWorkspace .architecture-spec-lead,
-#architectureWorkspace .architecture-spec-kicker {
-  grid-column: 1 / -1 !important;
-  margin: 0 0 5px !important;
-  padding: 0 0 14px !important;
-  border-bottom: 1px solid rgba(255, 255, 255, 0.22) !important;
-  font-family: 'Montserrat', sans-serif !important;
-  font-size: clamp(18px, 1.5vw, 23px) !important;
-  font-weight: 600 !important;
-  line-height: 1.22 !important;
-  letter-spacing: -0.01em !important;
-  color: #fff !important;
-}
-#architectureWorkspace .architecture-spec-intro {
-  grid-column: 1 / -1 !important;
-}
-#architectureWorkspace .architecture-spec-group {
-  grid-column: span 6 !important;
-  min-height: 120px !important;
-  padding: 17px 18px 16px !important;
-  margin: 0 !important;
-  background: linear-gradient(180deg, rgba(255, 255, 255, 0.055), rgba(255, 255, 255, 0.018)) !important;
-  border-top: 1px solid rgba(255, 255, 255, 0.42) !important;
-}
-#architectureWorkspace .architecture-spec-label {
-  margin-bottom: 14px !important;
-  color: rgba(255, 255, 255, 0.65) !important;
-  font-family: 'Martian Mono', monospace !important;
-  font-size: 10px !important;
-  font-weight: 700 !important;
-  letter-spacing: 0.16em !important;
-}
-#architectureWorkspace .architecture-spec-group p {
-  margin: 0 !important;
-  padding: 8px 0 !important;
-  border-top: 1px solid rgba(255, 255, 255, 0.1) !important;
-  font-family: 'Montserrat', sans-serif !important;
-  font-size: 14px !important;
-  font-weight: 500 !important;
-  line-height: 1.45 !important;
-  color: rgba(255, 255, 255, 0.88) !important;
-}
-#architectureWorkspace .architecture-spec-group p:first-of-type {
-  border-top: 0 !important;
-  padding-top: 0 !important;
-}
-#architectureWorkspace .architecture-spec-list {
-  grid-column: 1 / -1 !important;
-  display: grid !important;
-  grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
-  gap: 8px 14px !important;
-  margin: 0 !important;
-  padding: 0 !important;
-  list-style: none !important;
-}
-#architectureWorkspace .architecture-spec-list li {
-  position: relative !important;
-  margin: 0 !important;
-  padding: 13px 15px 13px 28px !important;
-  border-top: 1px solid rgba(255, 255, 255, 0.22) !important;
-  background: rgba(255, 255, 255, 0.025) !important;
-  font-family: 'Montserrat', sans-serif !important;
-  font-size: 13.5px !important;
-  font-weight: 500 !important;
-  line-height: 1.45 !important;
-  color: rgba(255, 255, 255, 0.84) !important;
-}
-#architectureWorkspace .architecture-spec-list li::before {
-  content: '' !important;
-  position: absolute !important;
-  left: 14px !important;
-  top: 19px !important;
-  width: 5px !important;
-  height: 5px !important;
-  background: rgba(255, 255, 255, 0.75) !important;
-}
-#architectureWorkspace .architecture-spec-visual {
-  margin-bottom: 18px !important;
-}
-
-@media (max-width: 900px) {
-  #architectureWorkspace .architecture-spec-group,
-  #architectureWorkspace .architecture-spec-list {
-    grid-column: 1 / -1 !important;
-  }
-  #architectureWorkspace .architecture-spec-list {
-    grid-template-columns: 1fr !important;
-  }
-}
-
-/* Homepage SOCIAL section: hidden for this iteration, to be redesigned
-   later. Data/rendering left intact — only display is suppressed. */
-.social-feed-section {
-  display: none !important;
-}
-
-/* Homepage PROGRAM NETWORK / partners section: removed from both desktop
-   and mobile. Data/rendering left intact — only display is suppressed. */
-.partners-section {
-  display: none !important;
-}
-
-/* MISSION is withheld for now: its nav entry and its modal are both taken
-   out of reach. Content and behaviour are left intact, so restoring it is
-   a matter of deleting this block. */
+/* Mission remains deliberately unavailable until it is brought back. */
 header nav button[onclick*="mission-modal"],
 #mission-modal {
   display: none !important;
 }
 
-/* Outer workspace shells (SYSTEM ARCHITECTURE / MISSION / UPDATES) stay
-   plain rectangles — only the rubricator rows and the docked heading keep
-   the chamfered-corner facet language. transfer-band-v3.css's and
-   styles.css's .media-shell rules both clip a corner (and styles.css adds
-   an offset outline on top), which on a wide shell produces a stray
-   diagonal seam where the outline and the clipped corner don't line up. */
-.media-shell,
-body .architecture-shell.media-shell {
-  clip-path: none !important;
-  outline: none !important;
+/* Preserve the current homepage iteration choices. */
+.social-feed-section,
+.partners-section {
+  display: none !important;
 }
 
 /* ============================================================
-   NARROW VIEWPORTS: two-level drill-down
-   ============================================================
-   Side-by-side index + article does not survive a phone: at 390px the
-   two columns were ~150px and ~230px, which shredded both the card
-   titles and the article measure. Splitting them into two levels is the
-   standard mobile answer and the one that keeps every card full width:
+   RESPONSIVE
+   ============================================================ */
 
-     level 1  the faceted index, one card per row, full width
-     level 2  the article, full width, with the docked band as its
-              heading and "← INDEX" in the shell header to go back
+@media (max-width: 900px) {
+  .architecture-shell > .media-shell-header,
+  #architectureWorkspace > .media-index-pane,
+  #architectureWorkspace.is-detail > .media-index-pane {
+    width: min(52%, 520px) !important;
+  }
+  #architectureWorkspace > .media-stage,
+  #architectureWorkspace.is-detail > .media-stage {
+    width: 47% !important;
+    right: -2% !important;
+  }
+  #architectureWorkspace .architecture-spec-group {
+    grid-template-columns: 1fr !important;
+    gap: 7px !important;
+  }
+  #architectureWorkspace .architecture-spec-group p { grid-column: 1 !important; }
+}
 
-   Both levels are stacked absolutely in the same box so switching
-   between them costs no reflow. The state is one `is-detail` class,
-   set by TransferCardController.enterDetail / exitDetail. */
 @media (max-width: 680px) {
-  #architectureWorkspace,
-  #missionWorkspace,
-  #mediaWorkspace {
-    display: block !important;
-    position: relative !important;
+  .taxonomy-section {
+    min-height: 950px !important;
+    padding-top: 20px !important;
+  }
+  .architecture-shell > .media-shell-header {
+    width: calc(100% - 20px) !important;
+    margin: 0 10px !important;
+  }
+  #architectureWorkspace {
+    min-height: 890px !important;
   }
   #architectureWorkspace > .media-index-pane,
-  #missionWorkspace > .media-index-pane,
-  #mediaWorkspace > .media-index-pane,
+  #architectureWorkspace.is-detail > .media-index-pane {
+    width: calc(100% - 20px) !important;
+    margin: 0 10px !important;
+  }
   #architectureWorkspace > .media-stage,
-  #missionWorkspace > .media-stage,
-  #mediaWorkspace > .media-stage {
+  #architectureWorkspace.is-detail > .media-stage {
     position: absolute !important;
-    inset: 0 !important;
+    top: auto !important;
+    right: auto !important;
+    left: 50% !important;
+    bottom: -4px !important;
+    width: 100vw !important;
+    height: 520px !important;
+    transform: translateX(-50%) !important;
+  }
+  .architecture-vehicle img,
+  #oryxImage {
+    height: 100% !important;
+    max-width: 78vw !important;
+  }
+  #oryxTitleLive { font-size: clamp(24px, 7vw, 31px) !important; }
+  #architectureWorkspace .media-article-header { padding: 18px 17px 13px !important; }
+  #architectureWorkspace #oryxText { padding: 16px 17px 19px !important; }
+
+  /* UPDATES stays master/detail even on a phone. The catalogue occupies a
+     short upper rail and never disappears; the article owns the lower area. */
+  #mediaWorkspace,
+  #mediaWorkspace.is-detail {
+    display: grid !important;
+    grid-template-columns: 1fr !important;
+    grid-template-rows: minmax(172px, 34%) minmax(0, 66%) !important;
+    height: 100% !important;
+  }
+  #mediaWorkspace > .media-index-pane,
+  #mediaWorkspace.is-detail > .media-index-pane,
+  #mediaWorkspace > .media-stage,
+  #mediaWorkspace.is-detail > .media-stage {
+    position: relative !important;
+    inset: auto !important;
+    display: block !important;
     width: auto !important;
     min-width: 0 !important;
     min-height: 0 !important;
-    max-height: none !important;
   }
-
-  /* Level 1 — the index. Sits on top until a card is picked. */
-  #architectureWorkspace > .media-index-pane,
-  #missionWorkspace > .media-index-pane,
-  #mediaWorkspace > .media-index-pane {
-    z-index: 2 !important;
-    border-right: 0 !important;
-  }
-  #architectureWorkspace > .media-stage,
-  #missionWorkspace > .media-stage,
-  #mediaWorkspace > .media-stage {
-    z-index: 1 !important;
-    display: none !important;
-  }
-
-  /* Level 2 — the article. */
-  #architectureWorkspace.is-detail > .media-index-pane,
-  #missionWorkspace.is-detail > .media-index-pane,
+  #mediaWorkspace > .media-index-pane,
   #mediaWorkspace.is-detail > .media-index-pane {
-    display: none !important;
+    border-right: 0 !important;
+    border-bottom: 1px solid rgba(255,255,255,.20) !important;
   }
-  #architectureWorkspace.is-detail > .media-stage,
-  #missionWorkspace.is-detail > .media-stage,
-  #mediaWorkspace.is-detail > .media-stage {
-    display: block !important;
-    z-index: 3 !important;
-    overflow-y: auto !important;
+  #mediaWorkspace #mediaList {
+    padding: 8px 9px 18px !important;
   }
-
-  /* The band is the article's heading, so it belongs to level 2 only —
-     otherwise it floats over the index once the reader goes back. */
-  .media-workspace:not(.is-detail) .transfer-card {
-    display: none !important;
-  }
-
-  /* Index cards: full width, one per row, facets kept, tap target kept
-     comfortably above the 44px minimum. */
-  #architectureWorkspace .media-index-list,
-  #missionWorkspace .media-index-list,
-  #mediaWorkspace .media-index-list {
-    padding: 10px !important;
-    gap: 8px !important;
-  }
-  #architectureWorkspace .media-index-item,
-  #missionWorkspace .media-index-item,
   #mediaWorkspace .media-index-item {
     width: 100% !important;
-    min-height: 56px !important;
-    margin: 0 !important;
-    padding: 14px 14px !important;
-    border: 0 !important;
-    border-top: 1px solid rgba(255, 255, 255, 0.34) !important;
-    background: linear-gradient(180deg, rgba(255, 255, 255, 0.06), rgba(255, 255, 255, 0.02)) !important;
-    box-shadow: none !important;
-    clip-path: polygon(11px 0, calc(100% - 11px) 0, 100% 11px, 100% 100%, 0 100%, 0 11px) !important;
+    min-height: 50px !important;
+    margin: 0 0 7px !important;
+    padding: 12px 13px !important;
   }
-  #architectureWorkspace .media-index-item.is-active,
-  #missionWorkspace .media-index-item.is-active,
-  #mediaWorkspace .media-index-item.is-active {
-    outline: none !important;
-    border-top-color: #fff !important;
-    background: linear-gradient(180deg, rgba(255, 255, 255, 0.16), rgba(255, 255, 255, 0.05)) !important;
-    clip-path: polygon(11px 0, calc(100% - 11px) 0, 100% 11px, 100% 100%, 0 100%, 0 11px) !important;
+  #mediaTitle {
+    font-size: clamp(21px, 6vw, 27px) !important;
   }
-  #architectureWorkspace .media-index-item-title,
-  #missionWorkspace .media-index-item-title,
-  #mediaWorkspace .media-index-item-title,
-  #architectureWorkspace .media-index-item-outlet,
-  #missionWorkspace .media-index-item-outlet,
-  #mediaWorkspace .media-index-item-outlet {
-    font-size: 13.5px !important;
-    line-height: 1.4 !important;
-    white-space: normal !important;
-    overflow: visible !important;
-    text-overflow: clip !important;
+  #mediaArticlePane .media-article-header {
+    padding: 15px 15px 13px !important;
   }
-  /* The drill-down affordance, including for Architecture which hides it
-     on the desktop side-by-side layout. */
-  #architectureWorkspace .media-index-item-arrow,
-  #missionWorkspace .media-index-item-arrow,
-  #mediaWorkspace .media-index-item-arrow {
-    display: block !important;
-    align-self: center !important;
-  }
-
-  /* SYSTEM ARCHITECTURE opts out of the drill-down. Its index and its text
-     now live in the same pane, so there is no second level to drill into —
-     the two panes simply stack, text above and the vehicle render below. */
-  #architectureWorkspace {
-    display: flex !important;
-    flex-direction: column !important;
-  }
-  #architectureWorkspace > .media-index-pane,
-  #architectureWorkspace.is-detail > .media-index-pane,
-  #architectureWorkspace > .media-stage,
-  #architectureWorkspace.is-detail > .media-stage {
-    position: relative !important;
-    inset: auto !important;
-    display: flex !important;
-  }
-  #architectureWorkspace > .media-index-pane {
-    flex: 1 1 auto !important;
-    min-height: 0 !important;
-  }
-  #architectureWorkspace > .media-stage {
-    flex: 0 0 34% !important;
-    min-height: 0 !important;
-  }
-  .architecture-shell .shell-back {
-    display: none !important;
-  }
-  .media-shell.architecture-shell.is-detail .media-shell-header .technical-label {
-    display: inline-flex !important;
-  }
-  #architectureWorkspace .transfer-card {
-    display: block !important;
-  }
-
-  /* Back control, in the shell's own header bar rather than as new chrome
-     inside the workspace (which the docked band already occupies). It is
-     labelled with the section's own name, so the header's separate label
-     stands down while it is showing — one name per bar, not two. */
-  .media-shell.is-detail .media-shell-header .shell-back {
-    display: inline-flex !important;
-  }
-  .media-shell.is-detail .media-shell-header .technical-label {
-    display: none !important;
-  }
-}
-
-.shell-back {
-  display: none;
-  align-items: center;
-  margin-right: 12px;
-  padding: 6px 11px;
-  border: 1px solid rgba(255, 255, 255, 0.5);
-  background: rgba(255, 255, 255, 0.07);
-  color: #fff;
-  font-family: 'Martian Mono', monospace;
-  font-size: 10px;
-  font-weight: 700;
-  letter-spacing: 0.12em;
-  clip-path: polygon(7px 0, calc(100% - 7px) 0, 100% 7px, 100% 100%, 0 100%, 0 7px);
 }
