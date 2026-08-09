@@ -44,12 +44,12 @@ body {
   background: var(--stitch-paper);
 }
 
-/* Keep existing UI surfaces above the material background. */
+/* Keep normal page surfaces above the material background. Modal positioning
+   is deliberately untouched — Tailwind's fixed positioning remains authoritative. */
 body > header,
 body > main,
 body > section,
-body > footer,
-body > [id$="-modal"] {
+body > footer {
   position: relative;
 }
 
