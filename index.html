@@ -10,13 +10,6 @@
 <script src="https://cdn.tailwindcss.com"></script>
 <script src="https://unpkg.com/lucide@latest"></script>
 
-
-
-
-
-
-
-
 <template id="__bundler_thumbnail">
 <svg viewBox="0 0 100 100" xmlns="http://www.w3.org/2000/svg">
 <rect width="100" height="100" fill="#242230"/>
@@ -31,6 +24,7 @@
 <link rel="stylesheet" href="css/transfer-band-v3.css">
 <link rel="stylesheet" href="css/refinements-v4.css">
 <link rel="stylesheet" href="css/interaction.css">
+<link rel="stylesheet" href="css/architecture-preview.css">
 </head>
 <body class="min-h-screen flex flex-col selection:bg-zinc-300 selection:text-black">
 <canvas aria-hidden="true" class="fixed inset-0 w-full h-full z-0 opacity-35 pointer-events-none" id="dither-gl"></canvas>
@@ -40,6 +34,7 @@
 <svg aria-hidden="true" class="aspire-logo-mark aspire-wordmark" fill="currentColor" viewBox="0 0 2220 959"><g transform="matrix(0.922347,0,0,0.972651,296.177,190.081)"><g transform="matrix(1.2173,0,0,1.15434,-1875.78,-4902.69)"><path d="M2104.48,4671.74L2080.34,4575.16L1958.78,4575.16L1934.63,4671.74L1901.33,4671.74L1980.42,4359.51L2059.11,4359.51L2137.79,4671.74L2104.48,4671.74ZM2005.4,4388.65L1966.27,4546.02L2073.26,4546.02L2034.13,4388.65L2005.4,4388.65ZM2256.02,4671.74L2169.43,4671.74L2169.43,4642.6L2253.94,4642.6C2287.66,4642.6 2300.98,4624.7 2300.98,4603.47C2300.98,4585.57 2290.16,4568.91 2254.77,4568.91L2231.04,4568.91C2194.41,4568.91 2168.59,4546.85 2168.59,4514.38C2168.59,4481.91 2194.41,4459.43 2231.04,4459.43L2322.63,4459.43L2322.63,4488.57L2232.29,4488.57C2210.64,4488.57 2200.65,4499.81 2200.65,4514.38C2200.65,4528.53 2211.06,4539.77 2232.29,4539.77L2256.43,4539.77C2309.3,4539.77 2333.03,4569.33 2333.03,4603.88C2333.03,4640.52 2309.3,4671.74 2256.02,4671.74ZM2479.16,4677.98C2448.35,4677.98 2422.12,4663.41 2403.81,4639.27L2403.81,4755L2371.34,4755L2371.34,4459.43L2403.81,4459.43L2403.81,4493.15C2422.12,4468.58 2448.35,4453.6 2479.16,4453.6C2537.44,4453.6 2586.15,4502.72 2586.15,4566.41C2586.15,4629.28 2537.44,4677.98 2479.16,4677.98ZM2479.16,4484.4C2446.27,4484.4 2418.79,4504.39 2403.81,4531.45L2403.81,4601.39C2417.96,4627.61 2446.27,4647.18 2479.16,4647.18C2519.95,4647.18 2552.84,4613.46 2552.84,4566.41C2552.84,4518.54 2519.95,4484.4 2479.16,4484.4ZM2666.91,4413.63L2634.44,4413.63L2634.44,4359.51L2666.91,4359.51L2666.91,4413.63ZM2666.91,4671.74L2634.44,4671.74L2634.44,4459.43L2666.91,4459.43L2666.91,4671.74ZM2828.02,4488.57C2791.39,4488.57 2765.99,4505.64 2754.34,4521.87L2754.34,4671.74L2721.86,4671.74L2721.86,4459.43L2754.34,4459.43L2754.34,4483.15C2771.82,4466.5 2796.38,4453.6 2828.02,4453.6L2828.02,4488.57ZM3050.74,4604.72C3036.17,4653.01 2992.46,4677.98 2949.16,4677.98C2885.89,4677.98 2838.01,4630.11 2838.01,4563.92C2838.01,4501.89 2888.8,4453.6 2948.33,4453.6C3012.03,4453.6 3054.91,4505.22 3054.91,4570.16L2870.48,4570.16C2873.4,4617.2 2905.04,4647.18 2949.16,4647.18C2976.22,4647.18 3006.2,4632.61 3018.27,4604.72L3050.74,4604.72ZM2948.33,4484.4C2910.87,4484.4 2881.72,4506.47 2872.98,4541.85L3017.86,4541.85C3010.78,4506.88 2987.05,4484.4 2948.33,4484.4ZM1608.4,4255.44L1623.41,4255.44L1630.93,4706.44L1600.88,4706.44L1608.4,4255.44ZM1548.31,4359.51L1563.33,4359.51L1570.84,4689.09L1540.8,4689.09L1548.31,4359.51ZM1488.22,4463.59L1503.24,4463.59L1510.75,4671.74L1480.71,4671.74L1488.22,4463.59ZM1683.5,4359.51L1691.02,4689.09L1660.97,4689.09L1668.49,4359.51L1683.5,4359.51ZM1743.59,4463.59L1751.11,4671.74L1721.06,4671.74L1728.58,4463.59L1743.59,4463.59Z" data-comment-anchor="ccdb0d7457-path"></path></g></g></svg>
 </div>
 <nav class="header-side header-side--right">
+<a class="text-white hover:text-white transition-colors cursor-pointer" href="architecture.html">Architecture</a>
 <button class="text-white hover:text-white transition-colors cursor-pointer" onclick="openModal('mission-modal')">Mission</button>
 <button class="text-white font-bold cursor-pointer" onclick="openModal('media-modal')">Updates</button>
 </nav>
@@ -56,29 +51,31 @@
 </div>
 </section>
 
-<section class="pt-6 taxonomy-section">
-<div class="media-shell architecture-shell">
-<div class="media-shell-header">
-<span class="technical-label flex items-center gap-2"> SYSTEM ARCHITECTURE</span>
-</div>
-<div class="media-workspace architecture-workspace" id="architectureWorkspace">
-<aside class="media-index-pane">
-<div class="media-index-list" id="oryxList"></div>
-</aside>
-<section class="media-stage" id="oryxStage">
-<article class="media-article-pane">
-<div class="media-article-scroll">
-<header class="media-article-header">
-<h2 class="media-title transfer-rail" id="oryxTitle">Select Component</h2>
-<span class="transfer-rail-a11y" id="oryxTitleLive"></span>
-</header>
-<div class="media-article-body" id="oryxText">
-<figure class="media-article-visual" id="oryxVisual" style="display:none"><img alt="" id="oryxImage"/></figure>
+<section class="pt-6 taxonomy-section" aria-labelledby="architecturePreviewTitle">
+<div class="arch-preview">
+<div class="arch-preview-inner">
+<div class="arch-preview-copy">
+<div class="arch-preview-label">SYSTEM ARCHITECTURE</div>
+<div>
+<h2 class="arch-preview-title" id="architecturePreviewTitle">ONE ARCHITECTURE.<br>TWO ROUTES TO ORBIT.</h2>
+<p class="arch-preview-deck">Oryx is built for launch, orbital operations and return. Launcher applies the same programme foundation to dedicated payload delivery.</p>
+<a class="arch-preview-cta" href="architecture.html">EXPLORE SYSTEM ARCHITECTURE <span aria-hidden="true">→</span></a>
 </div>
 </div>
-</article>
-</section>
-<div class="transfer-layer" aria-hidden="true"></div>
+<div class="arch-preview-visuals" aria-label="Oryx and Launcher configurations">
+<div class="arch-preview-vehicle arch-preview-vehicle--oryx">
+<img src="assets/images/system/R1V5.avif" alt="Oryx booster with D3 spacecraft">
+<div class="arch-preview-caption"><strong>ORYX</strong><span>LAUNCH / ORBIT / RETURN</span></div>
+</div>
+<div class="arch-preview-vehicle arch-preview-vehicle--launcher">
+<img src="assets/images/system/Fairings_2.avif" alt="Aspire Launcher with payload fairing">
+<div class="arch-preview-caption"><strong>LAUNCHER</strong><span>DEDICATED PAYLOAD DELIVERY</span></div>
+</div>
+<div class="arch-preview-d3">
+<img src="assets/images/system/S2_5.avif" alt="D3 Cargo Spaceship">
+<span>D3 / RETURNING ORBITAL VEHICLE</span>
+</div>
+</div>
 </div>
 </div>
 </section>
@@ -175,16 +172,12 @@
 </div>
 <div class="media-workspace" id="missionWorkspace"><canvas aria-hidden="true" class="media-background-map" id="missionBackdropGl"></canvas>
 <aside class="media-index-pane">
-
 <div class="media-index-list" id="missionList"></div>
-
 </aside>
 <section class="media-stage mission-stage" id="missionStage">
 <div class="media-idle mission-idle-state" id="missionIdleState">
 <canvas aria-hidden="true" class="media-idle-map" id="missionDitherGl"></canvas>
-
 <div class="media-idle-overlay"></div>
-
 </div>
 <article class="media-article-pane hidden" id="missionArticlePane">
 <div class="media-article-scroll" id="missionArticleScroll">
@@ -192,8 +185,6 @@
 <h2 class="media-title transfer-rail" id="missionTitle"></h2>
 <span class="transfer-rail-a11y" id="missionTitleLive"></span>
 </header>
-
-
 <div class="media-article-body" id="missionText"></div>
 </div>
 </article>
@@ -271,15 +262,6 @@
 </div>
 
 <!-- SILVER DITHER WORLD MAP: isolated background component -->
-
-
-
-
-
-
-
-
-
 <script src="js/script.js"></script>
 </body>
 </html>
