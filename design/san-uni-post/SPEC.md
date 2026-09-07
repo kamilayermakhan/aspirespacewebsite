@@ -55,6 +55,33 @@ commercial square-techno face for the bio (Eurostile/Neuropol family).
 The ornament crops overlap the portrait region; in both the source and the
 rebuild the portrait sits on top and masks that overlap.
 
+## Motion
+
+The post is a loop, not a still. Measured off the recording frame by frame:
+
+The source plays at **~17 fps** (84 unique frames across 4.88 s), so the whole
+thing reads chunky rather than smooth. **Nothing crossfades** — every state
+change is a hard cut, which is why the Figma keyframes use `HOLD` easing.
+
+| Phase | From | To | What happens |
+| --- | --- | --- | --- |
+| Dither hold | 0.00 s | 1.70 s | Four 1-bit noise frames round-robin every 0.17 s. The portrait silhouette stays put; only the speckle reshuffles. |
+| Cut in | 1.70 s | — | Hard flip to colour. The source steps through three progressively finer dither passes over ~0.13 s first. |
+| Colour hold | 1.70 s | 3.27 s | Essentially static. |
+| Cut out | 3.27 s | — | Loop point — hard flip back to dither. |
+
+Loop length **3.27 s**.
+
+Built on the `Post · orange — ANIMATED` artboard: the colour state sits over
+the dither state and its `OPACITY` is keyframed 0 → 1 at 1.70 s with `HOLD`.
+Each noise layer carries its own `HOLD` opacity track so exactly one is visible
+per 0.17 s slot — they blend `MULTIPLY`, so overlapping layers would compound
+into the union of their black pixels.
+
+`assets/dither_0..3.png` are the four noise frames, lifted from t = 0.28, 0.37,
+0.88 and 1.48 s. They were picked by maximising the minimum pairwise difference
+across eighteen candidates, so no two read as the same shuffle.
+
 ## Assets
 
 `assets/` holds the elements that could not be rebuilt as vectors, extracted
@@ -62,7 +89,8 @@ from the recording and chroma-keyed or background-baked as noted:
 
 - `orn_tl.jpg`, `orn_tr.jpg` — corner ornaments, green ground baked in
 - `portrait.jpg` — artist portrait with its glitch halo, green ground baked in
-- `dither.png` — the 1-bit dither layer (black on white, multiplied in Figma)
+- `dither_0.png` … `dither_3.png` — the four 1-bit noise frames of the loop
+  (black on white, multiplied in Figma)
 
 Because the baked-in green quantises slightly darker than `#9BFF81`, each
 raster carries an additive correction fill in Figma (`LINEAR_DODGE`,
