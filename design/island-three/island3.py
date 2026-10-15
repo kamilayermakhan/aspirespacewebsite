@@ -14,21 +14,24 @@ coordinate T and axial coordinate Z therefore projects to
       w = (cos T - e) sin B + Z cos B
       P(T, Z) = ( u / w , v / w ).
 
-Six sectors alternate around the tube: valleys of width WL = 1.30 rad centred
+Six sectors alternate around the tube: valleys of width WL = 1.257 rad centred
 on T = 0, 2pi/3, 4pi/3, and windows of width 2pi/3 - WL centred on T = pi/3,
-pi, 5pi/3.
+pi, 5pi/3.  A line of constant T leaves the vanishing point at screen angle
+arctan2((e - cos T)/cos B, sin T); the six values measured off Guidice's
+painting fix e and WL to within five degrees.
 """
 import numpy as np
 
-W, H = 2048, 1560
-XMIN, XMAX = -1.080, 0.864
-YMIN, YMAX = -0.590, 0.890
+W, H = 2048, 1613
+XMIN, XMAX = -1.322, 0.622
+YMIN, YMAX = -0.5725, 0.9585
 EY = 0.62                      # eye offset from the axis
 PITCH = 0.22                   # camera pitch, radians (looking down)
 ZC = 9.0                       # axial distance of the far end cap
 TAU = 2.0 * np.pi
-PHI0 = 0.0                     # the valley stays centred under the eye
-ROLL = 0.050                   # camera roll, radians
+PHI0 = 0.0                     # measured off the painting: a valley runs
+                               # straight down, the sun window straight up
+ROLL = 0.0                     # camera roll, radians
 CB, SB = np.cos(PITCH), np.sin(PITCH)
 CR, SR = np.cos(ROLL), np.sin(ROLL)
 VPY = SB / CB                  # vanishing point of the axis, on screen
@@ -80,10 +83,27 @@ class Canvas:
                         self.buf[:, ch] += np.bincount(
                             idx, weights=qc[:, ch] * wgt, minlength=self.n)
 
-    def image(self, gamma=1.0, gain=1.0):
-        b = np.clip(self.buf * gain, 0, None).reshape(self.h, self.w, 3)
-        b = b / (1.0 + b)
-        return (np.clip(np.power(b, 1.0 / gamma), 0, 1) * 255 + 0.5).astype(np.uint8)
+    def image(self, gain=1.0, sat=1.0, gamma=1.0):
+        """Tone-map the accumulated energy.
+
+        m -> m / (1 + m^3)^(1/3) is near the identity below half a unit and
+        folds everything brighter into [0, 1).  It is applied to the largest
+        of the three channels and the other two are scaled with it, so
+        compressing the highlights never bleaches a hue — the usual
+        per-channel curve turns the deep greens of the valley into the milky
+        olive of an over-exposed photograph.
+        """
+        b = np.nan_to_num(np.clip(self.buf * gain, 0, None), nan=0.0, posinf=0.0)
+        m = b.max(1)
+        f = 1.0 / np.cbrt(1.0 + m ** 3)
+        c = b * f[:, None]
+        if sat != 1.0:
+            g = c.mean(1)[:, None]
+            c = np.clip(g + sat * (c - g), 0, 1)
+        if gamma != 1.0:
+            c = np.power(np.clip(c, 0, 1), 1.0 / gamma)
+        c = c.reshape(self.h, self.w, 3)
+        return (np.clip(c, 0, 1) * 255 + 0.5).astype(np.uint8)
 
 
 # ------------------------------------------------------------ projection ----
@@ -94,6 +114,11 @@ def proj(T, Z, R=1.0):
     w = (R * np.cos(T) - EY) * SB + Z * CB
     x, y = u / w, v / w - VPY
     return x * CR - y * SR, x * SR + y * CR + VPY
+
+
+def front(T, Z, R=1.0):
+    """Depth of a point along the view axis; non-positive is behind the eye."""
+    return (R * np.cos(T + PHI0) - EY) * SB + Z * CB
 
 
 def sector_of(X, Y):
@@ -109,7 +134,7 @@ def sector_of(X, Y):
     return np.mod(np.arctan2(t * X, EY - t * dy) - PHI0, TAU), t
 
 
-WL = 1.30                      # angular width of a valley strip
+WL = 1.257                     # angular width of a valley strip
 WW = TAU / 3 - WL              # angular width of a window strip
 
 
@@ -139,18 +164,14 @@ def hsh(k, s):
 
 
 def dens(Z):
-    """Neighbouring curves of a converging family sit 1/Z apart on screen, so
-    a curve must carry amplitude proportional to that spacing for the surface
-    to hold a constant brightness with depth.
-
-    Together with the factor `steps` (the sample spacing along a curve) this
-    makes the deposited energy per square pixel equal to the intended colour:
-    energy / px^2 = amp / (step * separation).
-    """
+    """Kept for families that are not surfaces; see `area` in scene.py."""
     return 1.0 / np.asarray(Z)
 
 
-def haze(Z, rgb):
-    f = np.clip((Z - 0.55) / 5.5, 0, 1)[:, None] ** 0.9
-    air = np.array([0.330, 0.372, 0.405])
-    return rgb * (1 - 0.70 * f) + air * (0.70 * f)
+AIR = np.array([0.255, 0.205, 0.048])   # the far wall of the tube, read off
+                                        # the painting: dark, warm, olive
+
+
+def haze(Z, rgb, k=0.52):
+    f = np.clip((Z - 0.45) / 4.0, 0, 1)[:, None] ** 0.80
+    return rgb * (1 - k * f) + AIR * (k * f)
