@@ -254,14 +254,14 @@ LOOP = 0.6
 TOTAL = B0 + B_DUR + LOOP
 FOOT_START = 3.0
 
-VIEW_A = (0.55, 9.55, 3.5)
+VIEW_A = (0.9, 7.1, (7.1 - 0.9) * 843 / 1080 / 2)
 SIZE_A = (1080, 843)
-VIEW_B = (0.55, 16.4, 0)
 SIZE_B = (1080, 560)
-VIEW_B = (0.55, 16.4, (16.4 - 0.55) * 560 / 1080 / 2)
+VIEW_B = (0.9, 11.4, (11.4 - 0.9) * 560 / 1080 / 2)
+T_ALT0 = 4.8
 
 SIM_A = [(0.0, 0.0), (1.8, 0.30), (4.2, 0.82), (6.8, 1.45), (A_END, 2.30)]
-SIM_B = [(0.0, 0.0), (4.5, 1.25), (9.4, 5.6), (13.8, 8.0), (B_DUR, 8.6)]
+SIM_B = [(0.0, 0.0), (4.5, 1.25), (9.4, 4.8), (13.8, 6.8), (B_DUR, 7.4)]
 
 CAP_A = [(0.0, 2.1, "Methane and oxygen burn in a ring-shaped chamber."),
          (2.1, 4.3, "It chokes at the annular throat and goes supersonic."),
@@ -378,11 +378,11 @@ def frame_A(run, t, out=None):
            font=font("serifi", 27), fill=(170, 166, 186))
     # annotations
     org = (0, oy)
-    annotate(d, VIEW_A, SIZE_A, org, G.CH_X, G.CH_R + G.CH_AR + G.WALL, "TOROIDAL CHAMBER", ann_alpha(t, 0.3, 2.1), "up", 46)
-    annotate(d, VIEW_A, SIZE_A, org, G.T[0] + 0.02, -G.T[1], "ANNULAR THROAT", ann_alpha(t, 2.2, 4.3), "right", 70)
-    sx = 4.6
-    annotate(d, VIEW_A, SIZE_A, org, sx, -G.r_spike(sx), "SPIKE", ann_alpha(t, 4.4, 6.8), "down", 70)
-    annotate(d, VIEW_A, SIZE_A, org, 4.7, 2.3, "FREE BOUNDARY: AIR", ann_alpha(t, 6.9, 9.4), "up", 50)
+    thr_pt = G.E + G.S_THR * G.D
+    annotate(d, VIEW_A, SIZE_A, org, G.CH_X + 0.25, G.CH_R + 0.22, "TOROIDAL CHAMBER", ann_alpha(t, 0.3, 2.1), "right", 230)
+    annotate(d, VIEW_A, SIZE_A, org, thr_pt[0], -thr_pt[1], "ANNULAR THROAT", ann_alpha(t, 2.2, 4.3), "right", 110)
+    annotate(d, VIEW_A, SIZE_A, org, 3.9, -G.r_spike(3.9), "SPIKE", ann_alpha(t, 4.4, 6.8), "down", 70)
+    annotate(d, VIEW_A, SIZE_A, org, FB_A[0], FB_A[1], "FREE BOUNDARY: AIR", ann_alpha(t, 6.9, 9.4), "up", 50)
     # time row
     y = 1360
     ms = tn * run.t_unit * 1e3
@@ -420,21 +420,21 @@ def frame_B(run, foot, t, t_global):
     d = ImageDraw.Draw(im)
     header(d, "SIMULATION VS REAL", t_global / TOTAL)
     # sim labels
-    spaced(d, (100, oy + 24), "SIMULATION", F_LABEL, (205, 201, 218), 2.0)
+    spaced(d, (100, oy + 24), "SIMULATION", F_LABEL, (205, 201, 218), 2.0, stroke=4)
     ms = tn * run.t_unit * 1e3
     pa = run.stat(tn, run.pa)
-    if tn < 5.6:
+    if tn < T_ALT0:
         rt = f"T+ {ms:.2f} ms · {fmt(slower(SIM_B, t, run))}× SLOWER"
     else:
         rt = f"AMBIENT {pa:.2f} atm"
-    spaced(d, (980, oy + 24), rt, F_LABEL, LAV, 1.6, "r")
+    spaced(d, (980, oy + 24), rt, F_LABEL, LAV, 1.6, "r", stroke=4)
     org = (0, oy)
     v, s = VIEW_B, SIZE_B
-    annotate(d, v, s, org, 3.35, -(G.r_spike(3.35) + 0.07), "ANNULAR JET", ann_alpha(t, 2.5, 4.8), "left", 70)
-    annotate(d, v, s, org, 5.0, 2.2, "FREE BOUNDARY", ann_alpha(t, 4.9, 7.2), "up", 50)
-    annotate(d, v, s, org, G.X_SPIKE_END + 0.35, 0.0, "BASE WAKE", ann_alpha(t, 4.9, 7.2), "right", 90)
-    annotate(d, v, s, org, 4.3, -(G.r_spike(4.3) + 0.22), "WAVES", ann_alpha(t, 7.3, 9.4), "left", 105)
-    annotate(d, v, s, org, 4.6, 2.4, "PLUME OPENS", ann_alpha(t, 10.4, 14.1), "up", 40)
+    annotate(d, v, s, org, 2.85, -(G.r_spike(2.85) + 0.05), "ANNULAR JET", ann_alpha(t, 2.5, 4.8), "left", 70)
+    annotate(d, v, s, org, FB_B[0], FB_B[1], "FREE BOUNDARY", ann_alpha(t, 4.9, 7.2), "up", 50)
+    annotate(d, v, s, org, G.X_SPIKE_END + 0.25, 0.0, "BASE WAKE", ann_alpha(t, 4.9, 7.2), "right", 90)
+    annotate(d, v, s, org, WV_B[0], -WV_B[1], "WAVES", ann_alpha(t, 7.3, 9.4), "left", 105)
+    annotate(d, v, s, org, PO_B[0], PO_B[1], "PLUME OPENS", ann_alpha(t, 10.4, 14.1), "up", 40)
     # caption + stats
     cap, ca = caption_at(CAP_B, t)
     if cap: d.text((100, 896), cap, font=F_CAPB, fill=alpha_blend(INK, ca))
@@ -457,6 +457,10 @@ def frame_B(run, foot, t, t_global):
 
 
 SIZE_FOOT = (1080, 639)
+FB_A = (3.6, 1.4)      # annotation anchors (x, r), set from the solution
+FB_B = (3.8, 1.35)
+WV_B = (3.3, 0.85)
+PO_B = (4.7, 1.8)
 _shade = None
 
 
@@ -467,7 +471,7 @@ def _shade_mask():
         _shade = Image.fromarray(np.repeat(a[:, None], W, 1), "L")
     return _shade
 CREDITS = ["FOOTAGE · LEAP 71 (@LEAP.71), AEROSPIKE HOT FIRE",
-           "SIM · 2D AXISYMMETRIC EULER, γ 1.2, GENERIC TRUNCATED SPIKE",
+           "SIM · 2D AXISYMMETRIC EULER, γ 1.2, SPIKE TRACED FROM THE XRA-2E5 RENDER",
            "SPECS · LEAP71.COM: XRA-2E5, 200 kN, CH4/LOX, 1 m, INCONEL 718",
            "Pc 50 bar FROM THE 20 kN SIBLING · THRUST SCALED TO 200 kN IN VACUUM"]
 
@@ -493,7 +497,7 @@ def main():
     run = Run(run_dir)
     print(f"L0 = {run.L0:.4f} m, time unit = {run.t_unit * 1e3:.4f} ms, total sim "
           f"{run.t[-1] * run.t_unit * 1e3:.2f} ms, engine length "
-          f"{(G.X_SPIKE_END - G.X_BACK) * run.L0:.2f} m, lip dia {2 * G.R_E * run.L0:.2f} m, "
+          f"{(G.X_SPIKE_END - G.X_T) * run.L0:.2f} m spike, body dia {2 * G.R_BODY * run.L0:.2f} m, "
           f"sea-level thrust {run.stat(5.4, run.thrust_s) * run.kN:.0f} kN", flush=True)
     if "--preview" in sys.argv:
         ts = [float(v) for v in sys.argv[sys.argv.index("--preview") + 1].split(",")]

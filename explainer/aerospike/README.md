@@ -34,9 +34,15 @@ XRA-2E5. The video uses these assumptions, and the credits say so:
 
 * **Pc = 50 bar**, taken from the 20 kN sibling engine.
 * **Thrust is scaled** so that the post-climb (near-vacuum) value equals the rated 200 kN.
-* **The geometry is generic, not the real XRA-2E5 contour.** It has a toroidal chamber,
-  an annular throat tilted inward by the Prandtl–Meyer angle, and an ideal (Angelino)
-  spike truncated at 26 % of the lip radius, with design area ratio 10.
+* **Engine geometry is traced from the XRA-2E5 turntable render**
+  (`Aspire_engine_turntable_4K.mp4`). Measured in units of the spike root radius:
+  * the spike leaves the flat bottom face of a turned ring (r ≈ 1.8), below a flange
+    (≈ 2.1) and the main body (≈ 2.3, inside the lattice skin);
+  * it is gently concave, about 29° at the root, 2.06 long, and truncated at r ≈ 0.27.
+
+  The inside of the engine is not visible, so the internal layout is an assumption:
+  a toroidal chamber, and an annular slot whose throat sits just inside the ring and
+  then expands slightly to the ring face (area ratio about 8.7).
 
 The hot-fire footage is from LEAP 71's own reel (@leap.71). It shows an earlier
 Noyron aerospike, not the XRA-2E5, and the video labels it that way.
@@ -48,16 +54,16 @@ Noyron aerospike, not the XRA-2E5, and the video labels it that way.
 * MUSCL (minmod) reconstruction with HLLC fluxes and SSP-RK2 time stepping.
 * Stair-step slip walls.
 * A single perfect gas (γ = 1.2) plus a passive scalar that marks exhaust vs. air.
-* Grid: 1320 × 432 cells (Δ = 0.0125 L0).
+* Grid: 1438 × 450 cells (Δ = 0.008 × spike root radius).
 
 The chamber is fed by a thin "injector" region forced to the stagnation state (ramped
-to 50 bar, ~3,400 K). Ambient air is 1 atm and 300 K. From t = 5.6 to 7.8 the
+to 50 bar, ~3,400 K). Ambient air is 1 atm and 300 K. From t = 4.8 to 6.8 the
 far-field pressure ramps down to 0.03 atm to imitate the climb out of the atmosphere.
 
 ```
 gcc -O3 -march=native -fopenmp -o euler euler.c -lm
 python3 setup_case.py RUN_DIR            # params.txt + flags.u8 (geometry mask)
-./euler RUN_DIR                           # ~20–25 min on 4 cores, ~4 GB of snapshots
+./euler RUN_DIR                           # ~35 min on 4 cores, ~5 GB of snapshots
 python3 make_video.py RUN_DIR hotfire.mp4 out/aerospike-explainer.mp4
 ```
 
