@@ -18,8 +18,7 @@ What is assumed (the inside is not visible):
     a fillet turns it into the slender visible spike
   * the toroidal chamber sits in the bulge of the body and feeds the throat
     through a short converging slot
-  * regenerative cooling: LOX in the spike, methane in the outer wall (the layout
-    LEAP 71 describes for its 5 kN and 200 kN aerospikes)
+  * the regenerative cooling network is in cooling.py
 With 50 bar this throat (A_t ~2.3 L0^2) gives ~20 kN at the real size, so the size,
 the chamber pressure and the rated thrust agree.
 """
@@ -33,7 +32,8 @@ R_MAX = 4.10           # bulge just above the bottom corner
 R_TOP = 3.30           # narrower towards the injector head (off-screen)
 R_CORNER = 2.56        # where the rounded corner meets the lip
 X_BULGE = X_LIP - 1.90
-X_BACK = -2.0          # body continues upstream out of the domain
+X_BACK = -9.0          # body continues upstream out of the domain
+X_TAPER = -2.0         # the body tapers from R_TOP here to R_MAX at the bulge
 
 # ------------------------------------------------------------ annular throat
 R_LIP = 2.42           # cowl lip = outer edge of the throat
@@ -112,7 +112,7 @@ def _ang(p):
 def r_body(x):
     """Outer radius of the body upstream of the bottom corner."""
     x = np.asarray(x, dtype=float)
-    t = np.clip((X_BULGE - x) / (X_BULGE - X_BACK), 0, 1)
+    t = np.clip((X_BULGE - x) / (X_BULGE - X_TAPER), 0, 1)
     return R_MAX - (R_MAX - R_TOP) * t ** 1.6
 
 
@@ -141,73 +141,6 @@ def outline():
 
 
 OUTLINE = outline()
-
-
-def cooling_channels():
-    """Centre-points of regenerative cooling channels for the drawing:
-    (points, normals, kind) with kind 'lox' (spike) or 'ch4' (chamber wall / cowl)."""
-    out = []
-    # spike: just under the hot surface, throat to tip
-    xs = SPIKE_X; rs = SPIKE_R
-    seg = np.hypot(np.diff(xs), np.diff(rs)); s = np.concatenate([[0], np.cumsum(seg)])
-    for si in np.arange(0.06, s[-1] - 0.05, 0.085):
-        i = np.searchsorted(s, si)
-        tx, tr = xs[i] - xs[i - 1], rs[i] - rs[i - 1]
-        L = np.hypot(tx, tr); tx, tr = tx / L, tr / L
-        nx, nr = tr, -tx                                     # into the metal (towards the axis)
-        out.append(((xs[i] + 0.055 * nx, rs[i] + 0.055 * nr), (tx, tr), "lox"))
-    # chamber outer wall: around the outside of the torus
-    for a in np.linspace(-0.2, np.pi * 0.95, 16):
-        p = (CH_X + (CH_AX + WALL * 0.5) * np.cos(a), CH_R + (CH_AR + WALL * 0.5) * np.sin(a))
-        out.append((p, (-np.sin(a), np.cos(a)), "ch4"))
-    # cowl: along the outer wall of the slot
-    for sv in np.linspace(-0.6, -0.2, 4):
-        p = _pt(sv, _halfw(sv) + 0.035)
-        out.append(((p[0], p[1]), (D[0], D[1]), "ch4"))
-    return out
-
-
-def _offset_along(xs, rs, d):
-    """Offset a polyline by d along its left normal (positive d = towards the metal for
-    the spike contour, which runs throat -> tip with the metal on the axis side)."""
-    xs = np.asarray(xs, float); rs = np.asarray(rs, float)
-    tx = np.gradient(xs); tr = np.gradient(rs)
-    L = np.hypot(tx, tr); tx, tr = tx / L, tr / L
-    return xs + d * tr, rs - d * tx
-
-
-def coolant_paths():
-    """Regenerative cooling circuits for the drawing, as (x, r) polylines in flow order.
-    LOX (spike): down the axis to the tip, back along the spike wall to the throat,
-    then up the slot's inner wall to the injector face.
-    CH4 (outer chamber): in at the cowl lip, up the cowl wall, around the outside of
-    the toroidal chamber to the injector face."""
-    # --- LOX
-    r_ax = 0.16
-    x_tip = X_SPIKE_END - 0.13
-    ax_x = np.linspace(0.0, x_tip, 60); ax_r = np.full_like(ax_x, r_ax)
-    turn_r = np.linspace(r_ax, R_BASE - 0.08, 8); turn_x = np.full_like(turn_r, x_tip)
-    sx, sr = _offset_along(SPIKE_X, SPIKE_R, 0.075)
-    sx, sr = sx[::-1], sr[::-1]                                   # tip -> throat
-    keep = sx <= x_tip
-    sx, sr = sx[keep], sr[keep]
-    s_in = np.linspace(-0.05, -0.48, 20)
-    slot = np.array([_pt(s, -_halfw(s) - 0.07) for s in s_in])
-    p_in = slot[-1]
-    a0 = _ang(p_in); a1 = -np.pi                                   # under the torus to the injector face
-    if a0 > 0: a0 -= 2 * np.pi
-    ring = _ellipse(a0, a1, 30, WALL * 0.55)
-    lox = np.concatenate([np.stack([ax_x, ax_r], 1), np.stack([turn_x, turn_r], 1),
-                          np.stack([sx, sr], 1), slot, ring])
-    # --- CH4
-    s_out = np.linspace(-0.12, -L_P + 0.05, 25)
-    cowl = np.array([_pt(s, _halfw(s) + 0.045) for s in s_out])
-    p_c = cowl[-1]
-    b0 = _ang(p_c); b1 = np.pi
-    if b1 < b0: b1 += 2 * np.pi
-    outer = _ellipse(b0, b1, 40, WALL * 0.55)
-    ch4 = np.concatenate([cowl, outer])
-    return {"lox": lox, "ch4": ch4}
 
 
 def in_polygon(x, r, poly=OUTLINE):

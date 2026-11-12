@@ -34,8 +34,9 @@ P = dict(
 def main(d, dx=None):
     if dx: P["DX"] = dx
     os.makedirs(d, exist_ok=True)
-    nx = int(round(P["XMAX"] / P["DX"])); nr = int(round(P["RMAX"] / P["DX"]))
-    xc = (np.arange(nx) + 0.5) * P["DX"]; rc = (np.arange(nr) + 0.5) * P["DX"]
+    xmin = P.get("XMIN", 0.0)
+    nx = int(round((P["XMAX"] - xmin) / P["DX"])); nr = int(round(P["RMAX"] / P["DX"]))
+    xc = xmin + (np.arange(nx) + 0.5) * P["DX"]; rc = (np.arange(nr) + 0.5) * P["DX"]
     X, R = np.meshgrid(xc, rc, indexing="ij")
     s = G.solid(X, R)
     res = G.reservoir(X, R) & ~s
@@ -45,9 +46,10 @@ def main(d, dx=None):
     fl = (s * 1 + res * 2 + probe * 4 + sx * 8 + sr * 16).astype(np.uint8)
     fl.tofile(os.path.join(d, "flags.u8"))
     with open(os.path.join(d, "params.txt"), "w") as f:
-        for k, v in dict(P, NX=nx, NR=nr, XSPIKE=G.X_SPIKE_END, XLIP=G.X_LIP).items():
+        # the solver works in x - XMIN
+        for k, v in dict(P, NX=nx, NR=nr, XSPIKE=G.X_SPIKE_END - xmin, XLIP=G.X_LIP - xmin).items():
             f.write(f"{k} {v}\n")
-    np.savez(os.path.join(d, "grid.npz"), xc=xc, rc=rc, solid=s, **{k: v for k, v in P.items()})
+    np.savez(os.path.join(d, "grid.npz"), xc=xc, rc=rc, solid=s, **dict({k: v for k, v in P.items()}, XMIN=xmin))
     print("grid", nx, nr, nx * nr)
 
 if __name__ == "__main__":

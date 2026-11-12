@@ -10,6 +10,7 @@ import os, sys, json, math, subprocess
 import numpy as np
 from PIL import Image, ImageDraw, ImageFont, ImageFilter
 import geometry as G
+import cooling as CL
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 FONT = os.path.join(HERE, "fonts")
@@ -103,6 +104,8 @@ class Run:
         g = np.load(os.path.join(d, "grid.npz"))
         self.xc, self.rc, self.solid = g["xc"], g["rc"], g["solid"]
         self.dx = float(g["DX"])
+        self.xmin = float(g["XMIN"]) if "XMIN" in g.files else 0.0
+        self.st, self.tw = float(g["ST"]), float(g["TW"])
         self.gam_e, self.r_e, self.gam_a = float(g["GAM_E"]), float(g["R_E"]), float(g["GAM_A"])
         self.nx, self.nr = len(self.xc), len(self.rc)
         L = np.loadtxt(os.path.join(d, "log.txt"))
@@ -193,17 +196,17 @@ def engine_layer(view, size):
     if len(_outline_cache) > 8: _outline_cache.clear()
     w, h = size
     ss = 3
-    x0, x1, rmax = view
+    x0, x1, rmax, rc = view
     sx = w * ss / (x1 - x0)
     def px(pts, sign):
-        return [((x - x0) * sx, (h * ss) / 2 - sign * r * sx) for x, r in pts]
+        return [((x - x0) * sx, (h * ss) / 2 - (sign * r - rc) * sx) for x, r in pts]
     poly = G.OUTLINE
     full = np.concatenate([poly, (poly * [1, -1])[::-1]])
     lay = Image.new("RGBA", (w * ss, h * ss), (0, 0, 0, 0))
     d = ImageDraw.Draw(lay)
     pts = px(full, 1)
-    d.polygon(pts, fill=(15, 14, 30, 255))
-    d.line(pts + [pts[0]], fill=(168, 164, 188, 255), width=int(2.2 * ss), joint="curve")
+    d.polygon(pts, fill=CL.STEEL + (255,))
+    d.line(pts + [pts[0]], fill=(150, 152, 168, 255), width=int(2.2 * ss), joint="curve")
     lay = lay.resize((w, h), Image.LANCZOS)
     _outline_cache[key] = lay
     return lay
@@ -234,18 +237,18 @@ def palette_from_frame(img):
 
 def render_sim(run, tn, view, size, lut=None):
     w, h = size
-    x0, x1, rmax = view
+    x0, x1, rmax, rc = view
     k = run.idx(tn)
     rho, p, y = run.fields(k)[:3]
     pa = run.pa[k]
     # crop grid to the view for speed
-    i0 = max(int((x0 - 0.1) / run.dx), 0); i1 = min(int((x1 + 0.1) / run.dx) + 2, run.nx)
-    j1 = min(int((rmax + 0.1) / run.dx) + 2, run.nr)
+    i0 = max(int((x0 - 0.1 - run.xmin) / run.dx), 0); i1 = min(int((x1 + 0.1 - run.xmin) / run.dx) + 2, run.nx)
+    j1 = min(int((abs(rc) + rmax + 0.1) / run.dx) + 2, run.nr)
     sl = (slice(i0, i1), slice(0, j1))
     yy = y[sl].astype(np.float64)
     I = intensity(rho[sl].astype(np.float64), p[sl].astype(np.float64), yy, pa, run.dx, run.r_mix(yy))
     xs = x0 + (np.arange(w) + 0.5) * (x1 - x0) / w
-    rs = ((h / 2) - (np.arange(h) + 0.5)) * (x1 - x0) / w
+    rs = rc + ((h / 2) - (np.arange(h) + 0.5)) * (x1 - x0) / w
     img = sample(I, run.xc[i0], run.dx, xs, rs)
     rgb = (_lut if lut is None else lut)[np.clip((img * 1023).astype(int), 0, 1023)]
     im = Image.fromarray(rgb.astype(np.uint8), "RGB")
@@ -253,13 +256,28 @@ def render_sim(run, tn, view, size, lut=None):
     im = Image.blend(im, Image.fromarray(np.maximum(np.asarray(im), np.asarray(glow)), "RGB"), 0.55)
     lay = engine_layer(view, size)
     im.paste(lay, (0, 0), lay)
+    # printed-metal grain, in world coordinates
+    sc_ = w / (x1 - x0)
+    if sc_ > 60:
+        ix = np.floor(xs * 90).astype(np.int64)[None, :]
+        ir = np.floor(np.abs(rs) * 90).astype(np.int64)[:, None]
+        hsh = (ix * 73856093) ^ (ir * 19349663)
+        hsh = (hsh ^ (hsh >> 13)) * 1274126177
+        nz = ((hsh >> 7) & 255).astype(np.float32) / 255.0 - 0.5
+        alpha = np.asarray(lay)[..., 3].astype(np.float32) / 255.0
+        arr = np.asarray(im).astype(np.float32)
+        arr += (nz * 16.0 * alpha)[..., None]
+        im = Image.fromarray(np.clip(arr, 0, 255).astype(np.uint8), "RGB")
     return im
 
 
 # ------------------------------------------------------------------ footage
 # LEAP 71 hot fire at Airborne Engineering (60 fps, landscape after rotation): rotate so the
 # plume axis is horizontal, crop away the stand clutter and the app overlay in the corner
-CROP = "rotate=-23*PI/180:fillcolor=black,crop=1250:740:430:400"
+# measured: the bright core's axis is 26 deg below horizontal in the source; after this
+# rotation its edges are symmetric (-2.0 / +2.5 deg). The crop puts the axis at the vertical
+# centre and the engine exit at 25 % of the width (as in the reference), 35.4 px per L0.
+CROP = "rotate=-26*PI/180:fillcolor=black,crop=1230:728:442:425"
 FOOT_SLOW = 2.0     # played 2x slower (the source is 60 fps, so every frame is real)
 
 
@@ -307,30 +325,37 @@ def fv(f):
     return V0 + f * FOOT_SLOW
 
 
-T_JET = fv(0.50)    # the green jet leaves the ring in the footage == the sim jet leaves the slot
+T_JET = fv(0.517)   # first green streaks leave the ring in the footage == the sim jet leaves the slot
 
 PANEL_A = (492, 843)
 PANEL_B = (322, 560)
-VIEW_A0 = (0.4, 9.8)
-VIEW_A1 = (0.0, 11.3)
+# camera keyframes: (centre x, centre r, width) in L0
+CAM_CHAMBER = (2.95, 2.80, 2.7)      # chamber, injector, manifolds, cowl channels
+CAM_SPIKE = (4.30, 1.25, 4.6)        # down the spike to its tip and the LOX feed
+CAM_A1 = (5.65, 0.0, 11.3)           # whole engine
+CAM_B = (5.80, 0.0, 11.0)
 VIEW_B = (0.3, 11.3)
 
+# Flame course in the footage (source time): cold propellant flow 0-0.33 s; ignition
+# fireball 0.35-0.50 s; first thin green streaks from the ring, converging along the spike,
+# at 0.517 s; a growing, flickering green jet with an afterburning cloud beyond it to
+# 0.78 s; one bright full column from 0.80 s.
 SIM_MAP = [(0.0, 0.22), (3.0, 0.42), (7.0, 0.56), (T_A_END, 0.60), (T_TR_END, 0.64),
-           (T_FLASH, 0.70), (T_JET, 0.80),
-           # the sim jet length tracks the real flame length (both as a fraction of their panel)
-           (fv(0.60), 2.35), (fv(0.70), 3.50),
-           # the model's second stage (full pressure) lands on the real jet reaching full length
-           (fv(0.80), 5.00), (fv(0.90), 5.60), (fv(1.00), 6.00),
+           (T_FLASH, 0.70), (fv(0.50), 0.80),
+           # weak first stage: the jet leaves the slot and grows along the spike
+           (T_JET, 2.40), (fv(0.55), 3.00), (fv(0.65), 4.00), (fv(0.78), 4.95),
+           # second stage: full chamber pressure when the real flame becomes one full column
+           (fv(0.80), 5.40), (fv(0.85), 6.00),
            # then the established jet plays at ~1.4 model units per second
            (T_B_END, 21.40),
            (T_RW_END, 0.9), (TOTAL, 0.22)]
 
 TYPE_RATE = 46.0    # characters per second
 CAPS_A = [(0.25, "Methane and oxygen burn in a ring-shaped chamber."),
-          (3.1, "Cryogenic methane cools the outer chamber wall."),
-          (7.0, "Liquid oxygen cools the spike from the inside.")]
+          (3.1, "Liquid methane runs up the outer wall, then into the injector."),
+          (7.0, "Liquid oxygen cools the spike: down its core, up its skin.")]
 CAPS_B = [(10.5, "First light: a ring of flame forms around the spike."),
-          (12.25, "The jet grows as chamber pressure climbs, in both."),
+          (12.25, "At full pressure the jet fills out into one column, in both."),
           (13.75, "No bell: sea-level air presses the plume onto the spike."),
           (16.5, ("It pinches shut past the tip", 17.0, ", in the solve and on the stand.")),
           (20.0, None)]                       # closing line, filled in with the sim length
@@ -338,7 +363,8 @@ CAP_FADE_B = (19.45, 19.75)
 
 SIZE_FOOT = (1080, 639)
 CREDITS = ["FOOTAGE · LEAP 71, 20 kN METHALOX AEROSPIKE AT AIRBORNE ENGINEERING · 2× SLOWER",
-           "COOLING AS LEAP 71 DESCRIBES IT: CH4 IN THE OUTER CHAMBER, LOX IN THE SPIKE (DRAWN)",
+           "COOLING AS LEAP 71 DESCRIBES IT: CH4 IN THE OUTER CHAMBER, LOX IN THE SPIKE · CHANNEL LAYOUT ASSUMED",
+           "COOLANT AND WALL TEMPERATURES: 1D ENERGY BALANCE ON THE MODEL'S WALL HEAT FLUX",
            "MODEL · 2D AXISYMMETRIC, EXHAUST + AIR, AFTERBURNING, COOLED WALLS · INSIDE ASSUMED",
            "START-UP COMPRESSED, PLAYBACK MATCHED TO THE REAL FLAME · COLOURS FROM THE FOOTAGE",
            "SIZE FROM LEAP 71'S PHOTO · MODEL Pc ~46 bar (LEAP 71: 50) · THRUST, HEAT FLUX COMPUTED"]
@@ -351,19 +377,21 @@ def smooth_step(t, a, b):
     return ease((t - a) / (b - a)) if b > a else float(t >= a)
 
 
-def view_at(t):
-    def mix(v0, v1, s):
-        c0, c1 = (v0[0] + v0[1]) / 2, (v1[0] + v1[1]) / 2
-        w0, w1 = v0[1] - v0[0], v1[1] - v1[0]
-        c = c0 + (c1 - c0) * s
-        w = math.exp(math.log(w0) + (math.log(w1) - math.log(w0)) * s)
-        return (c - w / 2, c + w / 2)
-    if t < 2.9: return VIEW_A0
-    if t < T_A_END: return mix(VIEW_A0, VIEW_A1, smooth_step(t, 2.9, T_A_END))
-    if t < T_TR_END: return mix(VIEW_A1, VIEW_B, smooth_step(t, T_A_END, T_TR_END))
-    if t < T_B_END: return VIEW_B
-    if t < T_RW_END: return mix(VIEW_B, VIEW_A0, smooth_step(t, T_B_END, T_RW_END))
-    return VIEW_A0
+def cam_at(t):
+    """Camera (centre x, centre r, width) at video time t."""
+    def mix(c0, c1, u):
+        u = ease(u)
+        w = math.exp(math.log(c0[2]) + (math.log(c1[2]) - math.log(c0[2])) * u)
+        return (c0[0] + (c1[0] - c0[0]) * u, c0[1] + (c1[1] - c0[1]) * u, w)
+    if t < 4.6:
+        return mix(CAM_CHAMBER, (CAM_CHAMBER[0] + 0.10, CAM_CHAMBER[1] - 0.05, CAM_CHAMBER[2] * 0.92), t / 4.6)
+    c_end = (CAM_CHAMBER[0] + 0.10, CAM_CHAMBER[1] - 0.05, CAM_CHAMBER[2] * 0.92)
+    if t < 7.0: return mix(c_end, CAM_SPIKE, (t - 4.6) / 2.4)
+    if t < T_A_END: return mix(CAM_SPIKE, CAM_A1, (t - 7.0) / (T_A_END - 7.0))
+    if t < T_TR_END: return mix(CAM_A1, CAM_B, (t - T_A_END) / (T_TR_END - T_A_END))
+    if t < T_B_END: return CAM_B
+    if t < T_RW_END: return mix(CAM_B, CAM_CHAMBER, (t - T_B_END) / (T_RW_END - T_B_END))
+    return CAM_CHAMBER
 
 
 def panel_at(t):
@@ -448,10 +476,10 @@ def inline_stat(d, x, y, label, val, unit, a):
 
 
 def to_px(view, size, origin, x, r):
-    x0, x1, rmax = view
+    x0, x1, rmax, rc = view
     w, h = size
     s = w / (x1 - x0)
-    return origin[0] + (x - x0) * s, origin[1] + h / 2 - r * s
+    return origin[0] + (x - x0) * s, origin[1] + h / 2 - (r - rc) * s
 
 
 def annotate(d, view, size, origin, x, r, label, a, side="up", length=60, color=(214, 208, 236)):
@@ -507,116 +535,22 @@ def ann_win(t, a, b):
     return smooth_step(t, a, a + 0.3) * (1 - smooth_step(t, b - 0.3, b))
 
 
-_wall = None
-
-
-def _wall_samples():
-    """Points on the hot-gas side of the spike (incl. the steep bottom) for the heat glow."""
-    global _wall
-    if _wall is None:
-        xs, rs = G.SPIKE_X, G.SPIKE_R
-        seg = np.hypot(np.diff(xs), np.diff(rs)); sarc = np.concatenate([[0], np.cumsum(seg)])
-        pts = []
-        for si in np.arange(0.0, sarc[-1], 0.03):
-            i = max(1, int(np.searchsorted(sarc, si)))
-            tx, tr = xs[i] - xs[i - 1], rs[i] - rs[i - 1]
-            L = np.hypot(tx, tr); tx, tr = tx / L, tr / L
-            pts.append((xs[i], rs[i], -tr, tx))            # wall point + outward normal
-        _wall = np.array(pts)
-    return _wall
-
-
-_chan = None
-_wallpar = None
-
-
 def draw_walls_and_cooling(d, run, tn, view, size, origin, t, a):
-    """Regenerative cooling channels inside the metal (animated coolant flow) and the
-    model's wall heat flux as a glow on the spike surface."""
-    global _chan, _wallpar
-    if _chan is None:
-        _chan = True
-        _init_paths()
-        g = np.load(os.path.join(run.d, "grid.npz"))
-        _wallpar = (float(g["ST"]), float(g["TW"]))
-    st, tw = _wallpar
-    x0, x1, rmax = view
-    sc = size[0] / (x1 - x0)
-    top, bot = origin[1], origin[1] + size[1]
+    """Regenerative cooling network (cooling.py): coolant and wall temperatures from a 1D
+    energy balance on the model's wall heat flux, drawn inside the metal."""
     f = run.fields(run.idx(tn))
-    rho, p, y, u, v = f[0], f[1], f[2], f[3], f[4]
-    ws = _wall_samples()
-    ii = np.clip(((ws[:, 0] + 0.025 * ws[:, 2]) / run.dx).astype(int), 0, run.nx - 1)
-    jj = np.clip(((ws[:, 1] + 0.025 * ws[:, 3]) / run.dx).astype(int), 0, run.nr - 1)
-    yy = y[ii, jj]; Rm = run.r_mix(yy)
-    cv = yy * run.r_e / (run.gam_e - 1) + (1 - yy) / (run.gam_a - 1)
-    T = p[ii, jj] / (rho[ii, jj] * Rm)
-    q = st * rho[ii, jj] * np.hypot(u[ii, jj], v[ii, jj]) * (cv + Rm) * np.maximum(T - tw, 0)
-    qn = np.clip(q / 0.9, 0, 1)
-    lw = max(3, int(0.03 * sc))
-    for sgn in (1, -1):
-        for m in range(len(ws) - 1):
-            c = float(qn[m])
-            if c < 0.04: continue
-            col = (int(90 + 165 * min(1, c * 1.6)), int(30 + 200 * c ** 1.2), int(20 + 150 * c ** 2.2))
-            col = alpha_blend(col, a * min(1, c * 2.5), PANEL)
-            pa_ = to_px(view, size, origin, ws[m][0], sgn * ws[m][1])
-            pb_ = to_px(view, size, origin, ws[m + 1][0], sgn * ws[m + 1][1])
-            if top <= pa_[1] <= bot and top <= pb_[1] <= bot:
-                d.line([pa_, pb_], fill=col, width=lw)
-    # regenerative cooling circuits: coolant pulses travel along them and warm up on the way
-    lw2 = max(4, int(0.05 * sc))
-    for kind, cold, warm in (("ch4", (255, 140, 30), (255, 232, 170)), ("lox", (40, 130, 255), (200, 235, 255))):
-        P = _paths[kind]; S_ = _paths[kind + "_s"]; Ltot = S_[-1]
-        phase = t * 0.55
-        for sgn in (1, -1):
-            pts = [to_px(view, size, origin, P[m, 0], sgn * P[m, 1]) for m in range(len(P))]
-            for m in range(len(P) - 1):
-                (xa, ya), (xb, yb) = pts[m], pts[m + 1]
-                if not (top + 2 <= ya <= bot - 2 and top + 2 <= yb <= bot - 2): continue
-                if max(xa, xb) < 0 or min(xa, xb) > size[0]: continue
-                u_ = S_[m] / Ltot
-                col = tuple(int(cold[c] + (warm[c] - cold[c]) * u_) for c in range(3))
-                pulse = ((S_[m] - phase) % 0.32) < 0.15
-                aa = a * (1.0 if pulse else 0.45)
-                d.line([(xa, ya), (xb, yb)], fill=alpha_blend(col, aa, (15, 14, 30)), width=lw2)
-            # flow arrows every ~0.9 units along the circuit
-            for s_ar in np.arange(0.45, Ltot - 0.1, 0.9):
-                m = int(np.searchsorted(S_, (s_ar + phase) % Ltot))
-                m = min(max(m, 1), len(P) - 1)
-                (xa, ya), (xb, yb) = pts[m - 1], pts[m]
-                if not (top + 8 <= yb <= bot - 8) or not (0 <= xb <= size[0]): continue
-                dx_, dy_ = xb - xa, yb - ya; Ls = math.hypot(dx_, dy_) or 1
-                ux, uy = dx_ / Ls, dy_ / Ls
-                hs = lw2 * 2.2
-                tip = (xb + ux * hs * 0.6, yb + uy * hs * 0.6)
-                l1 = (xb - ux * hs - uy * hs * 0.7, yb - uy * hs + ux * hs * 0.7)
-                l2 = (xb - ux * hs + uy * hs * 0.7, yb - uy * hs - ux * hs * 0.7)
-                u_ = S_[m] / Ltot
-                col = tuple(int(cold[c] + (warm[c] - cold[c]) * u_) for c in range(3))
-                d.polygon([tip, l1, l2], fill=alpha_blend(col, a, (15, 14, 30)))
-
-
-_paths = None
-
-
-def _init_paths():
-    global _paths
-    P = G.coolant_paths()
-    out = {}
-    for k, v in P.items():
-        seg = np.hypot(np.diff(v[:, 0]), np.diff(v[:, 1]))
-        out[k] = v
-        out[k + "_s"] = np.concatenate([[0], np.cumsum(seg)])
-    _paths = out
+    S = CL.solve(run, f, run.stat(tn, run.pch) * 1.01325)
+    CL.draw(d, run, S, view, size, origin, t, a, to_px)
+    return S
 
 
 def make_frame(run, foot, n):
     t = n / FPS
     tn = sim_time(t)
     py, ph, ps = panel_at(t)
-    x0, x1 = view_at(t)
-    view = (x0, x1, (x1 - x0) * ph / W / 2)
+    cx_, cr_, cw_ = cam_at(t)
+    x0, x1 = cx_ - cw_ / 2, cx_ + cw_ / 2
+    view = (x0, x1, cw_ * ph / W / 2, cr_)
     size = (W, ph)
     im = Image.new("RGB", (W, H), BG)
 
@@ -638,6 +572,7 @@ def make_frame(run, foot, n):
         im.paste(Image.new("RGB", (W, 130), (6, 5, 14)), (0, fy), _shade_mask().point(lambda v: int(v * aF)))
 
     sim = render_sim(run, tn, view, size, flame_lut(t, n, fr_for_palette))
+    CS = draw_walls_and_cooling(ImageDraw.Draw(sim), run, tn, view, size, (0, 0), t, 1.0)
     # flash with the real ignition fireball
     fl = 0.0
     if T_FLASH - 0.08 <= t < T_FLASH + 0.6:
@@ -646,16 +581,18 @@ def make_frame(run, foot, n):
         sim = Image.blend(sim, Image.new("RGB", size, (236, 232, 244)), fl)
     im.paste(sim, (0, py))
     d = ImageDraw.Draw(im)
-    draw_walls_and_cooling(d, run, tn, view, size, (0, py), t, 1.0 - 0.6 * fl)
 
-    # coolant legend inside the sim panel
-    lg_y = py + (62 if ps >= 0.5 else 22)
-    lx = 100 if ps >= 0.5 else 620
-    for i, (name, col) in enumerate((("LIQUID METHANE · OUTER CHAMBER", (255, 176, 80)),
-                                     ("LIQUID OXYGEN · SPIKE", (110, 180, 255)))):
-        yy = lg_y + i * 24
-        d.rounded_rectangle([lx, yy + 5, lx + 26, yy + 12], radius=3, fill=col)
-        spaced(d, (lx + 36, yy), name, F_ANN, (214, 208, 236), 1.5, stroke=3)
+    # coolant legend inside the sim panel (part B), with the computed temperatures
+    if ps >= 0.5:
+        lg_y, lx = py + 62, 100
+        rows = (("LIQUID METHANE · OUTER CHAMBER", (255, 176, 80), f"OUT {CS.out['ch4']:.0f} K"),
+                ("LIQUID OXYGEN · SPIKE", (110, 180, 255), f"OUT {CS.out['lox']:.0f} K"),
+                ("CuCrZr WALL PEAK", CL.copper_glow(CS.peak_wall), f"{CS.peak_wall:.0f} K"))
+        for i, (name, col, val) in enumerate(rows):
+            yy = lg_y + i * 24
+            d.rounded_rectangle([lx, yy + 5, lx + 26, yy + 12], radius=3, fill=col)
+            wn = spaced(d, (lx + 36, yy), name, F_ANN, (214, 208, 236), 1.5, stroke=3)
+            spaced(d, (lx + 36 + wn + 12, yy), val, F_ANN, (255, 255, 255), 1.5, stroke=3)
 
     right = "SIMULATION" if ps < 0.5 else "SIMULATION VS REAL"
     header(d, right, t / TOTAL, 1.0 if abs(ps - 0.5) > 0.2 else abs(ps - 0.5) / 0.2)
@@ -675,26 +612,38 @@ def make_frame(run, foot, n):
         y += 110
         thr = max(0.0, run.stat(tn, run.thrust_s)) * run.kN
         stat_block(d, 100, y, "THRUST", f"{thr:.1f}", "kN", aA)
-        stat_block(d, 320, y, "EXIT MACH", f"{run.stat(tn, run.mach_s):.2f}", "", aA)
-        stat_block(d, 530, y, "CHAMBER", fmt(run.stat(tn, run.Tch) * T_AMB), "K", aA)
-        stat_block(d, 770, y, "Pc", f"{run.stat(tn, run.pch) * 1.01325:.1f}", "bar", aA)
+        stat_block(d, 270, y, "Pc", f"{run.stat(tn, run.pch) * 1.01325:.1f}", "bar", aA)
+        stat_block(d, 450, y, "CH4 OUT", f"{CS.out['ch4']:.0f}", "K", aA)
+        stat_block(d, 625, y, "LOX OUT", f"{CS.out['lox']:.0f}", "K", aA)
+        stat_block(d, 800, y, "Cu WALL", f"{CS.peak_wall:.0f}", "K", aA)
+        for xx, col in ((450, (255, 176, 80)), (625, (110, 180, 255)), (800, CL.copper_glow(CS.peak_wall))):
+            d.rounded_rectangle([xx, y - 12, xx + 26, y - 6], radius=3, fill=alpha_blend(col, aA))
         sparkline(d, run, tn, SIM_MAP[4][1], (100, y + 105, 930, y + 140), aA)
         spaced(d, (100, y + 154), "CHAMBER TEMP", F_TINY, alpha_blend((150, 146, 166), aA), 1.4)
         spaced(d, (290, y + 154), "CHAMBER PRESSURE", F_TINY, alpha_blend((140, 126, 200), aA), 1.4)
         if t < T_A_END + 0.3:
             org = (0, py)
-            if _paths is None: _init_paths()
-            annotate(d, view, size, org, G.CH_X, G.CH_R + G.CH_AR + 0.02, "TOROIDAL CHAMBER",
-                     aA * ann_win(t, 0.3, 3.0), "up", 40)
-            annotate(d, view, size, org, G.E[0], -G.E[1], "ANNULAR THROAT",
-                     aA * ann_win(t, 0.3, 3.0), "right", 70)
-            ch4 = _paths["ch4"]; p_c = ch4[int(len(ch4) * 0.62)]
-            annotate(d, view, size, org, p_c[0], p_c[1], "LIQUID METHANE · OUTER WALL",
-                     aA * ann_win(t, 3.2, 6.9), "up", 34, color=(255, 196, 120))
-            lox = _paths["lox"]; ls = _paths["lox_s"]
-            p_l = lox[int(np.searchsorted(ls, ls[-1] * 0.55))]
-            annotate(d, view, size, org, p_l[0], -p_l[1], "LIQUID OXYGEN · SPIKE",
-                     aA * ann_win(t, 7.0, 8.9), "right", 90, color=(150, 205, 255))
+            net = CL.network()
+            annotate(d, view, size, org, G.CH_X + 0.10, G.CH_R + G.CH_AR, "TOROIDAL CHAMBER",
+                     aA * ann_win(t, 0.3, 3.0), "up", 30)
+            fx = G.CH_X - G.CH_AX
+            annotate(d, view, size, org, fx + 0.01, G.CH_R - 0.02, "INJECTOR FACE",
+                     aA * ann_win(t, 0.3, 3.0), "left", 120)
+            annotate(d, view, size, org, G.E[0], G.E[1], "ANNULAR THROAT",
+                     aA * ann_win(t, 0.3, 3.0), "right", 60)
+            mo = net.m_ch4_out
+            annotate(d, view, size, org, mo[0] + mo[2], mo[1] + mo[2] * 0.5, "CH4 MANIFOLD",
+                     aA * ann_win(t, 3.1, 4.9), "up", 26, color=(255, 196, 120))
+            ch = net.channels["ch4"][6]["c"]
+            annotate(d, view, size, org, ch[0], ch[1], "CH4 CHANNELS IN THE COWL",
+                     aA * ann_win(t, 3.1, 4.9), "down", 150, color=(255, 196, 120))
+            annotate(d, view, size, org, (G.CH_X - G.CH_AX) + 0.02, G.CH_R + 0.12, "Cu LINER · STEEL SHELL",
+                     aA * ann_win(t, 3.1, 4.9), "left", 70)
+            lc = net.channels["lox"][len(net.channels["lox"]) // 2]["c"]
+            annotate(d, view, size, org, lc[0], lc[1], "LOX CHANNELS IN THE SPIKE SKIN",
+                     aA * ann_win(t, 5.2, 7.6), "right", 80, color=(150, 205, 255))
+            annotate(d, view, size, org, G.X_SPIKE_END - 0.6, net.bore_r * 0.5, "LOX FEED · SPIKE CORE",
+                     aA * ann_win(t, 6.9, 8.6), "up", 90, color=(150, 205, 255))
 
     # ---------------- part B overlays
     if aB > 0:
@@ -733,7 +682,7 @@ def find_closure(run):
     """Axis point behind the spike tip where the plume closes (steady sea level)."""
     k = run.idx(12.0)
     rho, p, y = run.fields(k)[:3]
-    i0 = int((G.X_SPIKE_END + 0.2) / run.dx)
+    i0 = int((G.X_SPIKE_END + 0.2 - run.xmin) / run.dx)
     j = 3
     yy = y[i0:, j]
     hit = np.where(yy > 0.5)[0]
