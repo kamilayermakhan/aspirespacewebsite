@@ -7,10 +7,11 @@ never restarts.
 
 | Time | What happens |
 |---|---|
-| 0–8.6 s | Close-up of the chamber, then a slow pull-back from 2.9 s. Three typewriter captions (0.25, 3.1, 7.0 s). Live T+ clock, slow-motion factor, thrust / exit Mach / chamber T / Pc, sparklines |
-| 8.6–9.25 s | Title and stats fade out, the sim panel slides up, and the hot-fire footage fades in below it |
-| 10.25 s | The sim panel flashes as the real engine reaches full flow (footage at 6.35 s) |
-| 10.5–22.3 s | Simulation vs. real. Captions start at 10.5, 12.25, 13.75, 16.5 (+17.0) and 20.0 s. Annotations appear and stay: free boundary, waves, plume closes |
+| 0–8.6 s | Close-up of the chamber filling, then a slow pull-back from 2.9 s. Three typewriter captions (0.25, 3.1, 7.0 s). No flame outside the engine yet |
+| 8.6–9.25 s | Title and stats fade out, the sim panel slides up, and the footage's first frame (the ignition spark) fades in |
+| 10.0 s | Flame appears in both at once: the jet leaves the slot in the sim exactly as the real engine ignites (wide shot, footage 0.0 s) |
+| 11.8 s | The footage cuts to the close-up; at 12.85 s the real engine reaches full flow (footage 6.35 s) and the sim panel flashes as the sim reaches full chamber pressure |
+| 10.5–22.3 s | Captions start at 10.5, 12.25, 13.75, 16.5 (+17.0) and 20.0 s. Annotations appear and stay: free boundary, waves, plume closes |
 | 22.3–23.8 s | Fast rewind of the sim and push-in back to the first frame, so the clip loops |
 
 Output: `out/aerospike-explainer.mp4`

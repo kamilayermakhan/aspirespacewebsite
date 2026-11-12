@@ -243,11 +243,15 @@ def render_sim(run, tn, view, size):
 
 
 # ------------------------------------------------------------------ footage
+CROP_WIDE = "rotate=-30*PI/180:fillcolor=black,crop=520:308:60:320"    # wide shot, 0-1.8 s
+CROP_CLOSE = "rotate=-20*PI/180:fillcolor=black,crop=600:355:80:560"   # close-up, 1.8 s on
+
+
 class Footage:
-    def __init__(self, path, start, dur, size):
+    def __init__(self, path, start, dur, size, crop=CROP_CLOSE):
         self.size = size
         w, h = size
-        vf = (f"fps={FPS},rotate=-20*PI/180:fillcolor=black,crop=600:355:80:560,"
+        vf = (f"fps={FPS},{crop},"
               f"scale={w}:{h}:flags=lanczos,eq=contrast=1.04:saturation=1.05")
         cmd = ["ffmpeg", "-v", "error", "-ss", str(start), "-t", str(dur + 1), "-i", path,
                "-vf", vf, "-f", "rawvideo", "-pix_fmt", "rgb24", "-"]
@@ -269,11 +273,15 @@ class Footage:
 # Same rhythm as the reference: one continuous take, no restart of the sim.
 T_A_END = 8.6       # part A: close-up, slow pull-back, three captions
 T_TR_END = 9.25     # header/title fade, panel moves up, footage fades in
-T_FLASH = 10.25     # sim panel flashes when the real engine reaches full flow
+T_IGN = 10.0        # the jet leaves the slot in the sim == ignition in the footage
+T_CUT = 11.8        # footage cuts from the wide shot to the close-up
+T_FLASH = 12.85     # sim panel flashes when the real engine reaches full flow
 T_B_END = 22.3      # end of part B
 T_RW_END = 23.25    # rewind + push-in back to the first frame
 TOTAL = 23.8
-FOOT_SYNC = 6.35    # footage time of full flow, shown at T_FLASH
+FOOT_WIDE0 = 0.0    # footage time of ignition (wide shot), shown at T_IGN
+FOOT_FULL = 6.35    # footage time of full flow (close-up), shown at T_FLASH
+FOOT_CLOSE0 = FOOT_FULL - (T_FLASH - T_CUT)
 
 PANEL_A = (492, 843)
 PANEL_B = (322, 560)
@@ -281,16 +289,17 @@ VIEW_A0 = (2.4, 8.1)
 VIEW_A1 = (0.3, 11.6)
 VIEW_B = (0.3, 14.0)
 
-SIM_MAP = [(0.0, 0.22), (3.0, 0.69), (4.4, 0.86), (7.0, 1.22), (T_A_END, 1.45), (T_TR_END, 1.55),
-           (T_FLASH, 1.76), (13.75, 2.6), (T_B_END, 4.75), (T_RW_END, 0.9), (TOTAL, 0.22)]
+SIM_MAP = [(0.0, 0.22), (3.0, 0.42), (7.0, 0.58), (T_A_END, 0.63), (T_TR_END, 0.665),
+           (T_IGN, 0.70), (10.6, 0.95), (T_CUT, 1.20), (T_FLASH, 1.42), (16.0, 2.4), (T_B_END, 4.75),
+           (T_RW_END, 0.9), (TOTAL, 0.22)]
 
 TYPE_RATE = 46.0    # characters per second
 CAPS_A = [(0.25, "Methane and oxygen burn in a ring-shaped chamber."),
-          (3.1, "It chokes at the annular throat and goes supersonic."),
-          (7.0, "The jet leaves the ring and runs down the spike.")]
-CAPS_B = [(10.5, "A dim violet jet first, then the full flow, in both."),
-          (12.25, "There's no bell, so the air itself is the outer wall."),
-          (13.75, "Waves bounce between spike and air and cross the plume."),
+          (3.1, "Hot gas floods the ring and pushes into the slot."),
+          (7.0, "Pressure climbs until the annular throat chokes.")]
+CAPS_B = [(10.5, "First light: the jet bursts out along the spike."),
+          (12.25, "A dim violet jet first, then the full flow, in both."),
+          (13.75, "There's no bell, so the air itself is the outer wall."),
           (16.5, ("It pinches shut past the tip", 17.0, ", in the solve and on the stand.")),
           (20.0, None)]                       # closing line, filled in with the sim length
 CAP_FADE_B = (19.45, 19.75)
@@ -457,7 +466,10 @@ def make_frame(run, foot, n):
     # footage (bottom), fades in from black
     fy = 1012
     if aF > 0:
-        fr = foot.frame_at(int(round((t - 9.0) * FPS)))
+        if t < T_CUT:
+            fr = foot[0].frame_at(max(0, int(round((t - T_IGN) * FPS))))
+        else:
+            fr = foot[1].frame_at(int(round((t - T_CUT) * FPS)))
         fr = Image.blend(Image.new("RGB", SIZE_FOOT, BG), fr, aF)
         im.paste(fr, (0, fy))
         im.paste(Image.new("RGB", (W, 130), (6, 5, 14)), (0, fy), _shade_mask().point(lambda v: int(v * aF)))
@@ -506,9 +518,9 @@ def make_frame(run, foot, n):
         spaced(d, (980, py + 24), f"T+ {ms:.2f} ms · {fmt(slower(t, run))}× SLOWER", F_LABEL,
                alpha_blend(LAV, aB), 1.6, "r", stroke=4)
         annotate(d, view, size, org, FB_B[0], FB_B[1], "FREE BOUNDARY",
-                 aB * smooth_step(t, 12.5, 12.8), "up", 50)
+                 aB * smooth_step(t, 14.0, 14.3), "up", 50)
         annotate(d, view, size, org, WV_B[0], -WV_B[1], "WAVES",
-                 aB * smooth_step(t, 14.0, 14.3), "left", 105)
+                 aB * smooth_step(t, 15.0, 15.3), "left", 105)
         annotate(d, view, size, org, PC_B[0], PC_B[1], "PLUME CLOSES",
                  aB * smooth_step(t, 17.0, 17.3), "up", 70)
         cap = typed(CAPS_B, t)
@@ -551,7 +563,8 @@ def main():
     CAPS_B[-1] = (20.0, f"The whole simulation is {total_ms:.1f} ms, quicker than a blink.")
     print(f"L0 = {run.L0:.4f} m, time unit = {run.t_unit * 1e3:.4f} ms, shown sim {total_ms:.2f} ms, "
           f"plume closes at x = {PC_B[0]:.2f}", flush=True)
-    foot = Footage(footage, FOOT_SYNC + (9.0 - T_FLASH), 14.5, SIZE_FOOT)
+    foot = (Footage(footage, FOOT_WIDE0, T_CUT - T_IGN + 0.2, SIZE_FOOT, CROP_WIDE),
+            Footage(footage, FOOT_CLOSE0, TOTAL - T_CUT, SIZE_FOOT, CROP_CLOSE))
     if "--preview" in sys.argv:
         ts = [float(v) for v in sys.argv[sys.argv.index("--preview") + 1].split(",")]
         for t in sorted(ts):
@@ -584,20 +597,26 @@ def make_audio(run, footage, path):
     tt = np.arange(n) / sr
     tn = np.interp(tt, [p[0] for p in SIM_MAP], [p[1] for p in SIM_MAP])
     env = np.clip(np.interp(tn, run.t, run.pch) / 50.0, 0, 1) ** 0.8
-    gate = 1 - np.clip((tt - 9.0) / 0.5, 0, 1) + np.clip((tt - T_B_END) / 0.6, 0, 1)
+    gate = 1 - np.clip((tt - T_IGN) / 0.3, 0, 1) + np.clip((tt - T_B_END) / 0.6, 0, 1)
     rumble = br * env * np.clip(gate, 0, 1) * 0.35
-    s0 = 9.0
-    raw = subprocess.run(["ffmpeg", "-v", "error", "-ss", str(FOOT_SYNC + (s0 - T_FLASH)), "-t", str(TOTAL - s0),
-                          "-i", footage, "-ac", "2", "-ar", str(sr), "-f", "f32le", "-"],
-                         capture_output=True).stdout
-    fa = np.frombuffer(raw, np.float32).reshape(-1, 2)
+
+    def clip(start, dur):
+        raw = subprocess.run(["ffmpeg", "-v", "error", "-ss", str(start), "-t", str(dur), "-i", footage,
+                              "-ac", "2", "-ar", str(sr), "-f", "f32le", "-"], capture_output=True).stdout
+        return np.frombuffer(raw, np.float32).reshape(-1, 2).copy()
+
     mix = np.zeros((n, 2), np.float32)
     mix[:, 0] += rumble; mix[:, 1] += rumble
-    i0 = int(s0 * sr)
-    m = min(len(fa), n - i0)
-    tl = tt[i0:i0 + m]
-    g = (np.clip((tl - s0) / 0.4, 0, 1) * (1 - np.clip((tl - T_B_END) / 0.6, 0, 1)))[:, None]
-    mix[i0:i0 + m] += fa[:m] * g
+    xf = int(0.03 * sr)
+    wide = clip(FOOT_WIDE0, T_CUT - T_IGN + 0.03)
+    close = clip(FOOT_CLOSE0 - 0.03, TOTAL - T_CUT + 0.03)
+    i0 = int(T_IGN * sr); m = min(len(wide), n - i0)
+    fade_out = np.ones(m); fade_out[-xf:] = np.linspace(1, 0, xf)
+    mix[i0:i0 + m] += wide[:m] * fade_out[:, None]
+    i1 = int(T_CUT * sr) - xf; m = min(len(close), n - i1)
+    tl = np.arange(m) / sr + i1 / sr
+    g = np.clip((tl - (T_CUT - 0.03)) / 0.03, 0, 1) * (1 - np.clip((tl - T_B_END) / 0.6, 0, 1))
+    mix[i1:i1 + m] += close[:m] * g[:, None]
     mix = np.clip(mix, -1, 1)
     subprocess.run(["ffmpeg", "-v", "error", "-y", "-f", "f32le", "-ar", str(sr), "-ac", "2", "-i", "-", path],
                    input=mix.astype(np.float32).tobytes(), check=True)
