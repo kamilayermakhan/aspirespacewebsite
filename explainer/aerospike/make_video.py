@@ -123,7 +123,9 @@ class Run:
         """Exhaust-weighted static pressure just outside the slot exit (cached)."""
         fn = os.path.join(self.d, "exit_p.npy")
         if os.path.exists(fn):
-            return np.load(fn)
+            cached = np.load(fn)
+            if len(cached) == len(self.t):
+                return cached
         i = int((G.X_LIP + 0.06) / self.dx)
         w_r = self.rc
         out = np.zeros(len(self.t))
@@ -315,8 +317,8 @@ VIEW_B = (1.5, 10.5)
 SIM_MAP = [(0.0, 0.22), (3.0, 0.42), (7.0, 0.58), (T_A_END, 0.62), (T_TR_END, 0.64),
            # after ignition the sim jet length tracks the real flame length frame by frame
            # (both measured as a fraction of their panel; the real flame appears on the frame at +0.10 s)
-           (T_IGN, 0.68), (T_IGN + 0.067, 0.72), (T_IGN + 0.10, 2.10), (T_IGN + 0.133, 2.75),
-           (T_IGN + 0.20, 3.00), (T_IGN + 0.40, 3.60), (T_IGN + 0.87, 4.40),
+           (T_IGN, 0.72), (T_IGN + 0.067, 0.80), (T_IGN + 0.10, 2.40), (T_IGN + 0.133, 3.00),
+           (T_IGN + 0.20, 3.30), (T_IGN + 0.40, 3.60), (T_IGN + 0.80, 4.00), (T_IGN + 0.87, 4.60),
            # then the established jet plays at ~1.5 sim units per second so its eddies
            # move about as fast as the real flame's
            (T_B_END, 21.40),
@@ -328,7 +330,7 @@ CAPS_A = [(0.25, "Methane and oxygen burn in a ring-shaped chamber."),
           (7.0, "Pressure climbs until the annular throat chokes.")]
 CAPS_B = [(10.5, "First light: the jet bursts out along the spike."),
           (12.25, "A dim violet jet first, then the full flow, in both."),
-          (13.75, "There's no bell, so the air itself is the outer wall."),
+          (13.75, "No bell: sea-level air presses the plume onto the spike."),
           (16.5, ("It pinches shut past the tip", 17.0, ", in the solve and on the stand.")),
           (20.0, None)]                       # closing line, filled in with the sim length
 CAP_FADE_B = (19.45, 19.75)

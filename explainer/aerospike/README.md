@@ -27,9 +27,15 @@ Output: `out/aerospike-explainer.mp4`
   * an urn-shaped body: about 3.3 at the head, a bulge of about 4.1, then a rounded
     corner into an almost flat bottom face;
   * a short, stubby spike: about 20° at the root, 1.73 long, truncated at r ≈ 0.56.
-* **The internal layout is an assumption,** because the inside is not visible: a toroidal
-  chamber, and an annular slot with its throat just inside the bottom face (area ratio
-  about 7.9).
+* **The internal layout is an assumption,** because the inside is not visible:
+  * a toroidal chamber;
+  * an annular slot with its throat just inside the bottom face (area ratio about 7.2);
+  * a short ramp and fillet from the slot into the traced spike profile.
+* **The slot points the flow 50° inward,** not along the visible 20° spike root. After
+  the external expansion at the lip down to 1 atm (about 37° of Prandtl–Meyer turning
+  for γ = 1.2 and Pc/pa = 50), the outer jet boundary still heads inward, so sea-level
+  air presses the plume onto the spike, as in the hot fire. A 22° slot made the
+  boundary splay outward like a spray.
 * **Footage:** LEAP 71's own reel (@leap.71).
 
 ## Simulation
@@ -39,6 +45,9 @@ Output: `out/aerospike-explainer.mp4`
 * MUSCL (minmod) reconstruction with HLLC fluxes and SSP-RK2 time stepping.
 * Stair-step slip walls.
 * A single perfect gas (γ = 1.2) plus a passive scalar that marks exhaust vs. air.
+* A Smagorinsky eddy viscosity (Cs = 0.45) in the shear layers. It stands in for the
+  turbulent entrainment that empties the base region behind the truncated spike, so
+  the plume can close there as it does on the stand.
 * Grid: 1150 × 280 cells (Δ = 0.01 × spike root radius). The domain is cropped to the frame, and the body runs into the top boundary.
 
 The chamber is fed by a thin "injector" region forced to the stagnation state (ramped
@@ -56,7 +65,7 @@ Playback speed:
 ```
 gcc -O3 -march=native -fopenmp -o euler euler.c -lm
 python3 setup_case.py RUN_DIR            # params.txt + flags.u8 (geometry mask)
-./euler RUN_DIR                           # ~35 min on 4 cores, ~4 GB of snapshots
+./euler RUN_DIR                           # ~1 h on 4 cores, ~4 GB of snapshots
 python3 make_video.py RUN_DIR hotfire.mp4 out/aerospike-explainer.mp4
 ```
 

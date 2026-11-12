@@ -10,7 +10,7 @@ spike root radius:
   * an urn-shaped body: ~3.1 at the top, bulging to ~4.1 near the bottom,
     with a rounded corner into an almost flat bottom face
   * a short, stubby, slightly concave spike: root slope ~20 deg,
-    length ~1.73, truncated at r ~0.56
+    length ~1.73, truncated at r ~0.56, with a fillet into the bottom face
 The inside is not visible, so the toroidal chamber and the annular feed slot
 (throat just inside the bottom face, small internal expansion, exit aligned
 with the spike root) are a plausible layout, not LEAP 71's.
@@ -25,7 +25,7 @@ _R = np.array([1.00, 0.90, 0.81, 0.74, 0.675, 0.615, 0.565, 0.55])
 
 X_LIP = 4.50           # flat bottom face (exit plane of the slot)
 R_LIP = 1.10           # outer lip of the annular slot
-THETA = np.radians(22.0)  # slot / jet direction, inward from the axis
+THETA = np.radians(50.0)  # steep enough that sea-level air pushes the plume in (see README)  # slot / jet direction, inward from the axis
 D = np.array([np.cos(THETA), -np.sin(THETA)])   # flow direction in the slot
 N = np.array([np.sin(THETA), np.cos(THETA)])    # across the slot (inner -> lip)
 
@@ -37,13 +37,18 @@ W_P1 = 0.15            # half-width where the slot meets the chamber
 
 E = np.array([X_LIP, R_LIP]) - W_EXIT * N       # slot exit centre
 X_T, R_T = E - W_EXIT * N                       # inner exit point = spike root
-SPIKE_X = X_T + _S * R_T
-SPIKE_R = _R * R_T
-# smooth the measured profile
-_xf = np.linspace(SPIKE_X[0], SPIKE_X[-1], 400)
-_rf = np.interp(_xf, SPIKE_X, SPIKE_R)
-_rf = np.convolve(np.pad(_rf, 6, mode="edge"), np.ones(13) / 13, mode="valid")
-_rf[0] = SPIKE_R[0]
+# a short ramp along the slot direction, then the measured (photo) profile, corner rounded
+SEG_DROP = 0.08
+R_ROOT2 = R_T - SEG_DROP
+X_ROOT2 = X_T + SEG_DROP / np.tan(THETA)
+_px = np.concatenate([[X_T], X_ROOT2 + _S * R_ROOT2])
+_pr = np.concatenate([[R_T], _R * R_ROOT2])
+_xf = np.linspace(X_T, _px[-1], 700)
+_rf = np.interp(_xf, _px, _pr)
+_k = 15
+_rs = np.convolve(np.pad(_rf, _k, mode="edge"), np.ones(2 * _k + 1) / (2 * _k + 1), mode="valid")
+_w = np.clip((_xf - X_T) / 0.03, 0, 1)          # keep the very first point on the slot wall
+_rf = _rf * (1 - _w) + _rs * _w
 SPIKE_X, SPIKE_R = _xf, _rf
 X_SPIKE_END = SPIKE_X[-1]
 R_BASE = SPIKE_R[-1]
@@ -55,7 +60,7 @@ R_FLAT = 2.40          # end of the flat bottom face
 X_BULGE = X_LIP - 1.90 # axial position of the widest point
 
 # toroidal chamber
-CH_X, CH_R, CH_AX, CH_AR = X_LIP - 0.75, 1.52, 0.42, 0.30
+CH_X, CH_R, CH_AX, CH_AR = X_LIP - 0.78, 1.66, 0.42, 0.30
 _P1 = E - L_P * D
 WALL = 0.12
 X_BACK = -2.0          # body continues upstream out of the domain

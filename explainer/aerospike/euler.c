@@ -15,7 +15,8 @@
 
 static int NX, NR;
 static double DX, GAM, PC, TC, CFL, T_END, T_IGN, T_RAMP, T_ALT0, T_ALT1, PA_HIGH;
-static double XSPIKE, XLIP, SNAP_DT1, SNAP_DT2, SNAP_SWITCH, NU = 0;
+static double XSPIKE, XLIP, SNAP_DT1, SNAP_DT2, SNAP_SWITCH, NU = 0, CS = 0;
+static double *NUT;   /* Smagorinsky eddy viscosity per cell */
 static unsigned char *FL;  /* bit0 solid, bit1 reservoir, bit2 probe, bit3 flat_x, bit4 flat_r */
 static double *rc, *rf;
 #define EPS 1e-6
@@ -69,9 +70,10 @@ static double *W[5], *SX[5], *SRr[5], *FX[5], *FR[5];
 /* eddy-viscosity flux across a face (normal gradients only), added to F.
    a = cell on the minus side, b = plus side; un/ut map (u,v) to normal/tangential */
 static inline void visc_flux(size_t a, size_t b, double h, int rdir, double *F) {
-    if (NU <= 0) return;
+    double nu = NU + (CS > 0 ? 0.5 * (NUT[a] + NUT[b]) : 0.0);
+    if (nu <= 0) return;
     double rho = 0.5 * (W[0][a] + W[0][b]);
-    double mu = rho * NU, cp = GAM / (GAM - 1);
+    double mu = rho * nu, cp = GAM / (GAM - 1);
     double du = (W[1][b] - W[1][a]) / h, dv = (W[2][b] - W[2][a]) / h;
     double Ta = W[3][a] / W[0][a], Tb = W[3][b] / W[0][b];
     double dT = (Tb - Ta) / h, dY = (W[4][b] - W[4][a]) / h;
@@ -138,6 +140,24 @@ static double rhs(double **U, double t, double **dU, int want_dt) {
         for (int k = 0; k < 5; k++) SRr[k][c] = fr ? 0 : minmod(W[k][c] - a[k], b[k] - W[k][c]);
         (void)m;
     }
+    /* Smagorinsky eddy viscosity: nu_t = (CS*DX)^2 |S| (shear layers only) */
+    if (CS > 0) {
+        double l2 = (CS * DX) * (CS * DX), cap = 3.0 * DX;
+        #pragma omp parallel for
+        for (int i = 0; i < NX; i++) for (int j = 0; j < NR; j++) {
+            size_t c = ID(i, j);
+            if (SOLID(c) || i == 0 || i == NX - 1 || j == NR - 1) { NUT[c] = 0; continue; }
+            size_t e = ID(i + 1, j), w = ID(i - 1, j), n = ID(i, j + 1), s_ = j > 0 ? ID(i, j - 1) : c;
+            if (SOLID(e)) e = c; if (SOLID(w)) w = c; if (SOLID(n)) n = c; if (SOLID(s_)) s_ = c;
+            double dxw = (e != c && w != c) ? 2 * DX : DX, dyw = (n != c && s_ != c) ? 2 * DX : DX;
+            double ux = (W[1][e] - W[1][w]) / dxw, vx = (W[2][e] - W[2][w]) / dxw;
+            double ur = (W[1][n] - W[1][s_]) / dyw, vr = (W[2][n] - W[2][s_]) / dyw;
+            double vor = W[2][c] / rc[j];
+            double S2 = 2 * (ux * ux + vr * vr + vor * vor) + (ur + vx) * (ur + vx);
+            double nt = l2 * sqrt(S2);
+            NUT[c] = nt < cap ? nt : cap;
+        }
+    }
     /* x faces: face i between cell i-1 and i, i = 0..NX */
     #pragma omp parallel for
     for (int i = 0; i <= NX; i++) for (int j = 0; j < NR; j++) {
@@ -153,7 +173,7 @@ static double rhs(double **U, double t, double **dU, int want_dt) {
         if (sR) { memcpy(R, L, sizeof L); R[1] = -L[1]; }
         if (sL) { memcpy(L, R, sizeof R); L[1] = -R[1]; }
         hllc(L, R, F);   /* (rho,u,v) normal = u */
-        if (!sL && !sR && i > 0 && i < NX) visc_flux(ID(i - 1, j), ID(i, j), DX, 0, F);
+        if ((NU > 0 || CS > 0) && !sL && !sR && i > 0 && i < NX) visc_flux(ID(i - 1, j), ID(i, j), DX, 0, F);
         for (int k = 0; k < 5; k++) FX[k][f] = F[k];
     }
     /* r faces: face j between cell j-1 and j, j = 0..NR */
@@ -174,7 +194,7 @@ static double rhs(double **U, double t, double **dU, int want_dt) {
         r[0] = R[0]; r[1] = R[2]; r[2] = R[1]; r[3] = R[3]; r[4] = R[4];
         hllc(l, r, F);
         { double t1 = F[1]; F[1] = F[2]; F[2] = t1; }   /* back to (mass, u-mom, v-mom, E, Y) */
-        if (!sL && !sR && j > 0 && j < NR) visc_flux(ID(i, j - 1), ID(i, j), DX, 1, F);
+        if ((NU > 0 || CS > 0) && !sL && !sR && j > 0 && j < NR) visc_flux(ID(i, j - 1), ID(i, j), DX, 1, F);
         double rr = rf[j];
         for (int k = 0; k < 5; k++) FR[k][f] = F[k] * rr;
     }
@@ -188,10 +208,10 @@ static double rhs(double **U, double t, double **dU, int want_dt) {
         for (int k = 0; k < 5; k++)
             dU[k][c] = -(FX[k][fx1] - FX[k][fx0]) / DX - (FR[k][fr1] - FR[k][fr0]) / (rc[j] * DX);
         dU[2][c] += W[3][c] / rc[j];
-        if (NU > 0) dU[2][c] -= W[0][c] * NU * W[2][c] / (rc[j] * rc[j]);
+        if (NU > 0 || CS > 0) dU[2][c] -= W[0][c] * (NU + (CS > 0 ? NUT[c] : 0)) * W[2][c] / (rc[j] * rc[j]);
         if (want_dt) {
             double cs = sqrt(GAM * W[3][c] / W[0][c]);
-            double s = (fabs(W[1][c]) + cs) / DX + (fabs(W[2][c]) + cs) / DX + CFL * 4 * NU * GAM / (DX * DX);
+            double s = (fabs(W[1][c]) + cs) / DX + (fabs(W[2][c]) + cs) / DX + CFL * 4 * (NU + (CS > 0 ? NUT[c] : 0)) * GAM / (DX * DX);
             if (s > smax) smax = s;
         }
     }
@@ -253,7 +273,7 @@ static void read_params(const char *dir) {
         P("NX", NX) P("NR", NR) P("DX", DX) P("GAM", GAM) P("PC", PC) P("TC", TC) P("CFL", CFL)
         P("T_END", T_END) P("T_IGN", T_IGN) P("T_RAMP", T_RAMP) P("T_ALT0", T_ALT0) P("T_ALT1", T_ALT1)
         P("PA_HIGH", PA_HIGH) P("XSPIKE", XSPIKE) P("XLIP", XLIP)
-        P("NU", NU) P("SNAP_DT1", SNAP_DT1) P("SNAP_DT2", SNAP_DT2) P("SNAP_SWITCH", SNAP_SWITCH)
+        P("NU", NU) P("CS", CS) P("SNAP_DT1", SNAP_DT1) P("SNAP_DT2", SNAP_DT2) P("SNAP_SWITCH", SNAP_SWITCH)
     }
     fclose(f);
 }
@@ -267,6 +287,7 @@ int main(int argc, char **argv) {
     char fn[1024]; snprintf(fn, sizeof fn, "%s/flags.u8", dir);
     FILE *f = fopen(fn, "rb"); if (!f || fread(FL, 1, N, f) != N) { fprintf(stderr, "flags\n"); return 1; }
     fclose(f);
+    NUT = calloc(N, sizeof(double));
     rc = malloc(NR * sizeof(double)); rf = malloc((NR + 1) * sizeof(double));
     for (int j = 0; j < NR; j++) rc[j] = (j + 0.5) * DX;
     for (int j = 0; j <= NR; j++) rf[j] = j * DX;

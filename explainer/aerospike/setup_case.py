@@ -16,6 +16,7 @@ P = dict(
     T_IGN=0.05, T_RAMP=1.10,          # ignition and pressure ramp
     T_ALT0=100.0, T_ALT1=101.0, PA_HIGH=0.03,   # no climb-out: sea level throughout
     SNAP_DT1=0.008, SNAP_DT2=0.025, SNAP_SWITCH=2.4, NU=0.0,
+    CS=0.45,         # Smagorinsky coefficient: turbulent mixing in the shear layers
 )
 
 def main(d, dx=None):
