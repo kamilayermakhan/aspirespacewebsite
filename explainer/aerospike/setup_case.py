@@ -7,15 +7,15 @@ import numpy as np
 import geometry as G
 
 P = dict(
-    DX=0.01, XMAX=14.0, RMAX=4.6,
+    DX=0.01, XMAX=11.5, RMAX=2.8,
     GAM=1.2,
     PC=53.2,         # reservoir; gives ~50 bar in the chamber
     TC=11.7,         # ~3500 K chamber / 300 K ambient
     CFL=0.4,
-    T_END=7.4,
+    T_END=21.6,
     T_IGN=0.05, T_RAMP=1.10,          # ignition and pressure ramp
-    T_ALT0=4.8, T_ALT1=6.8, PA_HIGH=0.03,   # ambient pressure drop: climb-out
-    SNAP_DT1=0.008, SNAP_DT2=0.016, SNAP_SWITCH=2.4, NU=0.0,
+    T_ALT0=100.0, T_ALT1=101.0, PA_HIGH=0.03,   # no climb-out: sea level throughout
+    SNAP_DT1=0.008, SNAP_DT2=0.025, SNAP_SWITCH=2.4, NU=0.0,
 )
 
 def main(d, dx=None):

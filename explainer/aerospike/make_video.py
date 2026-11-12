@@ -219,7 +219,30 @@ def engine_layer(view, size):
     return lay
 
 
-def render_sim(run, tn, view, size):
+def palette_from_frame(img):
+    """LUT (1024x3) that gives sim intensity the colours of the real flame in `img`:
+    the flame's pixels sorted by brightness, darkest -> I~0.12, brightest -> I=1."""
+    a = np.asarray(img.resize((300, 178))).astype(np.float32)
+    lum = a @ np.array([0.299, 0.587, 0.114], np.float32)
+    m = lum > 62
+    if m.sum() < 600:
+        return None
+    px = a[m][np.argsort(lum[m])]
+    nb = 40
+    edges = np.linspace(0, len(px), nb + 1).astype(int)
+    cols = np.array([px[edges[i]:edges[i + 1]].mean(0) for i in range(nb)])
+    k = np.ones(5) / 5
+    cols = np.stack([np.convolve(np.pad(cols[:, c], 2, mode="edge"), k, mode="valid") for c in range(3)], 1)
+    # bin averaging washes colours out; restore the footage's saturation
+    lum_c = (cols @ np.array([0.299, 0.587, 0.114]))[:, None]
+    cols = np.clip(lum_c + (cols - lum_c) * 1.65, 0, 255)
+    xs = np.concatenate([[0.0, 0.05, 0.15], np.linspace(0.22, 1.0, nb)])
+    ys = np.concatenate([[PANEL, PANEL, (58, 54, 88)], cols])      # faint air waves stay neutral
+    grid = np.linspace(0, 1, 1024)
+    return np.stack([np.interp(grid, xs, ys[:, c]) for c in range(3)], 1).astype(np.float32)
+
+
+def render_sim(run, tn, view, size, lut=None):
     w, h = size
     x0, x1, rmax = view
     k = run.idx(tn)
@@ -233,7 +256,7 @@ def render_sim(run, tn, view, size):
     xs = x0 + (np.arange(w) + 0.5) * (x1 - x0) / w
     rs = ((h / 2) - (np.arange(h) + 0.5)) * (x1 - x0) / w
     img = sample(I, run.xc[i0], run.dx, xs, rs)
-    rgb = _lut[np.clip((img * 1023).astype(int), 0, 1023)]
+    rgb = (_lut if lut is None else lut)[np.clip((img * 1023).astype(int), 0, 1023)]
     im = Image.fromarray(rgb.astype(np.uint8), "RGB")
     glow = im.filter(ImageFilter.GaussianBlur(radius=max(3, w / 160)))
     im = Image.blend(im, Image.fromarray(np.maximum(np.asarray(im), np.asarray(glow)), "RGB"), 0.55)
@@ -292,9 +315,11 @@ VIEW_B = (1.5, 10.5)
 SIM_MAP = [(0.0, 0.22), (3.0, 0.42), (7.0, 0.58), (T_A_END, 0.62), (T_TR_END, 0.64),
            # after ignition the sim jet length tracks the real flame length frame by frame
            # (both measured as a fraction of their panel; the real flame appears on the frame at +0.10 s)
-           (T_IGN, 0.68), (T_IGN + 0.067, 0.72), (T_IGN + 0.10, 1.85), (T_IGN + 0.133, 2.30),
-           (T_IGN + 0.20, 2.75),
-           (T_IGN + 0.80, 3.20), (T_IGN + 0.90, 3.75), (T_B_END, 4.75),
+           (T_IGN, 0.68), (T_IGN + 0.067, 0.72), (T_IGN + 0.10, 2.10), (T_IGN + 0.133, 2.75),
+           (T_IGN + 0.20, 3.00), (T_IGN + 0.40, 3.60), (T_IGN + 0.87, 4.40),
+           # then the established jet plays at ~1.5 sim units per second so its eddies
+           # move about as fast as the real flame's
+           (T_B_END, 21.40),
            (T_RW_END, 0.9), (TOTAL, 0.22)]
 
 TYPE_RATE = 46.0    # characters per second
@@ -453,6 +478,26 @@ def _shade_mask():
     return _shade
 
 
+_pal = {"n": None, "lut": None}
+LUT_A = None          # first-light colours, used before ignition and after the rewind
+
+
+def flame_lut(t, n, frame):
+    """Sim palette that follows the colours of the real flame shown below."""
+    target = LUT_A
+    if frame is not None and T_IGN + 0.09 <= t < T_B_END:
+        p = palette_from_frame(frame)
+        if p is not None:
+            target = p
+    if t >= T_B_END:
+        target = LUT_A
+    prev = _pal["lut"] if _pal["n"] == n - 1 else None
+    k = 0.35 if t < T_CUT + 0.3 else 0.18
+    lut = target if prev is None else prev + (target - prev) * k
+    _pal["n"], _pal["lut"] = n, lut
+    return lut
+
+
 def make_frame(run, foot, n):
     t = n / FPS
     tn = sim_time(t)
@@ -469,6 +514,10 @@ def make_frame(run, foot, n):
 
     # footage (bottom), fades in from black
     fy = 1012
+    fr_for_palette = None
+    if t >= T_IGN:
+        fr_for_palette = (foot[0].frame_at(max(0, int(round((t - T_IGN) * FPS)))) if t < T_CUT
+                          else foot[1].frame_at(int(round((t - T_CUT) * FPS))))
     if aF > 0:
         if t < T_CUT:
             fr = foot[0].frame_at(max(0, int(round((t - T_IGN) * FPS))))
@@ -478,7 +527,7 @@ def make_frame(run, foot, n):
         im.paste(fr, (0, fy))
         im.paste(Image.new("RGB", (W, 130), (6, 5, 14)), (0, fy), _shade_mask().point(lambda v: int(v * aF)))
 
-    sim = render_sim(run, tn, view, size)
+    sim = render_sim(run, tn, view, size, flame_lut(t, n, fr_for_palette))
     # flash when the real engine reaches full flow
     fl = 0.0
     if T_FLASH - 0.08 <= t < T_FLASH + 0.6:
@@ -567,6 +616,8 @@ def main():
     CAPS_B[-1] = (20.0, f"The whole simulation is {total_ms:.1f} ms, quicker than a blink.")
     print(f"L0 = {run.L0:.4f} m, time unit = {run.t_unit * 1e3:.4f} ms, shown sim {total_ms:.2f} ms, "
           f"plume closes at x = {PC_B[0]:.2f}", flush=True)
+    global LUT_A
+    LUT_A = palette_from_frame(Footage(footage, FOOT_WIDE0 + 0.4, 0.2, SIZE_FOOT, CROP_WIDE).frame_at(0))
     foot = (Footage(footage, FOOT_WIDE0, T_CUT - T_IGN + 0.2, SIZE_FOOT, CROP_WIDE),
             Footage(footage, FOOT_CLOSE0, TOTAL - T_CUT, SIZE_FOOT, CROP_CLOSE))
     if "--preview" in sys.argv:

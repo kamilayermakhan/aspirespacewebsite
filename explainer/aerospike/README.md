@@ -39,24 +39,35 @@ Output: `out/aerospike-explainer.mp4`
 * MUSCL (minmod) reconstruction with HLLC fluxes and SSP-RK2 time stepping.
 * Stair-step slip walls.
 * A single perfect gas (γ = 1.2) plus a passive scalar that marks exhaust vs. air.
-* Grid: 1400 × 460 cells (Δ = 0.01 × spike root radius).
+* Grid: 1150 × 280 cells (Δ = 0.01 × spike root radius). The domain is cropped to the frame, and the body runs into the top boundary.
 
 The chamber is fed by a thin "injector" region forced to the stagnation state (ramped
-to 50 bar, ~3,400 K). Ambient air is 1 atm and 300 K. The video shows t = 0.22–4.75
-(sea level). The run continues with a far-field pressure ramp to 0.03 atm, which the
-video does not use.
+to 50 bar, ~3,400 K). Ambient air is 1 atm and 300 K throughout, and the run goes to
+t = 21.6.
+
+Playback speed:
+* **Before ignition** the video shows chamber filling only (t = 0.22–0.68).
+* **After ignition** the sim jet length tracks the measured real flame length frame by
+  frame. Both are measured as a fraction of their panel, starting on the frame where the
+  real flame appears.
+* **The established jet** then plays at about 1.5 sim units per second, so its eddies move
+  about as fast as the real flame's.
 
 ```
 gcc -O3 -march=native -fopenmp -o euler euler.c -lm
 python3 setup_case.py RUN_DIR            # params.txt + flags.u8 (geometry mask)
-./euler RUN_DIR                           # ~35 min on 4 cores, ~5 GB of snapshots
+./euler RUN_DIR                           # ~35 min on 4 cores, ~4 GB of snapshots
 python3 make_video.py RUN_DIR hotfire.mp4 out/aerospike-explainer.mp4
 ```
 
 `make_video.py` handles the rest:
 
-* It renders the fields (exhaust fraction × temperature, with a schlieren layer)
-  in a violet palette and draws the engine outline from `geometry.py`.
+* It renders the fields (exhaust fraction × temperature, with a schlieren layer) and draws
+  the engine outline from `geometry.py`.
+* It colours the flame from the footage on screen. The flame pixels of the current
+  hot-fire frame are sorted by brightness and mapped onto the sim intensity, saturation
+  is restored, and the palette is smoothed over time. Ignition comes out warm, the
+  low-flow phase violet-pink and full flow blue-white, as in the real fire.
 * It sets all type in Jost (OFL, see `fonts/`).
 * It rotates and crops the hot-fire footage so its plume axis is horizontal like the sim.
 * It mixes the audio: a synthetic rumble driven by the simulated chamber pressure in
