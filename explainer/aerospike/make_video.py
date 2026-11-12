@@ -287,10 +287,14 @@ PANEL_A = (492, 843)
 PANEL_B = (322, 560)
 VIEW_A0 = (2.4, 8.1)
 VIEW_A1 = (0.3, 11.6)
-VIEW_B = (0.3, 14.0)
+VIEW_B = (1.5, 10.5)
 
-SIM_MAP = [(0.0, 0.22), (3.0, 0.42), (7.0, 0.58), (T_A_END, 0.63), (T_TR_END, 0.665),
-           (T_IGN, 0.70), (10.6, 0.95), (T_CUT, 1.20), (T_FLASH, 1.42), (16.0, 2.4), (T_B_END, 4.75),
+SIM_MAP = [(0.0, 0.22), (3.0, 0.42), (7.0, 0.58), (T_A_END, 0.62), (T_TR_END, 0.64),
+           # after ignition the sim jet length tracks the real flame length frame by frame
+           # (both measured as a fraction of their panel; the real flame appears on the frame at +0.10 s)
+           (T_IGN, 0.68), (T_IGN + 0.067, 0.72), (T_IGN + 0.10, 1.85), (T_IGN + 0.133, 2.30),
+           (T_IGN + 0.20, 2.75),
+           (T_IGN + 0.80, 3.20), (T_IGN + 0.90, 3.75), (T_B_END, 4.75),
            (T_RW_END, 0.9), (TOTAL, 0.22)]
 
 TYPE_RATE = 46.0    # characters per second
