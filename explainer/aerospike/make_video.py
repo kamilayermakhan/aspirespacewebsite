@@ -20,7 +20,7 @@ GAM = 1.2
 P_ATM = 101325.0
 T_AMB = 300.0
 U_REF = math.sqrt(287.0 * T_AMB)        # velocity unit (p = rho T, air gas constant)
-RATED_THRUST_KN = 200.0                  # LEAP 71: XRA-2E5, 200 kN
+RATED_THRUST_KN = 20.0                   # LEAP 71: 20 kN methalox aerospike (sea level)
 
 # ------------------------------------------------------------------ palette
 BG = (9, 8, 20)
@@ -111,12 +111,30 @@ class Run:
         # smooth the wall-pressure thrust a little (start-up waves ring on the walls)
         self.thrust_s = self._smooth(self.thrust, self.t, 0.12)
         self.mach_s = self._smooth(self.mach_exit, self.t, 0.12)
-        # physical scale: thrust after the climb-out (vacuum-like) == rated 200 kN
-        vac = self.thrust_s[self.t > self.t.max() - 0.4].mean()
-        self.L0 = math.sqrt(RATED_THRUST_KN * 1e3 / (vac * P_ATM))
+        # physical scale: steady sea-level thrust == the engine's 20 kN
+        sl = self.thrust_s[(self.t > 3.0) & (self.t < 4.7)].mean()
+        self.L0 = math.sqrt(RATED_THRUST_KN * 1e3 / (sl * P_ATM))
         self.t_unit = self.L0 / U_REF
         self.kN = self.L0 ** 2 * P_ATM / 1e3
         self.cache = {}
+        self.exit_p = self._exit_pressure()
+
+    def _exit_pressure(self):
+        """Exhaust-weighted static pressure just outside the slot exit (cached)."""
+        fn = os.path.join(self.d, "exit_p.npy")
+        if os.path.exists(fn):
+            return np.load(fn)
+        i = int((G.X_LIP + 0.06) / self.dx)
+        w_r = self.rc
+        out = np.zeros(len(self.t))
+        for k in range(len(self.t)):
+            a = np.fromfile(os.path.join(self.d, f"s{k:05d}.f32"), np.float32, count=3 * self.nx * self.nr)
+            a = a.reshape(3, self.nx, self.nr)
+            p, y = a[1, i], a[2, i]
+            w = y * w_r * (~self.solid[i])
+            out[k] = (p * w).sum() / w.sum() if w.sum() > 1e-6 else 1.0
+        np.save(fn, out)
+        return out
 
     @staticmethod
     def _smooth(y, t, w):
@@ -170,7 +188,7 @@ def sample(field, xc0, dx, xs, rs):
     f = field
     out = (f[I0, J0] * (1 - WI) * (1 - WJ) + f[I0 + 1, J0] * WI * (1 - WJ)
            + f[I0, J0 + 1] * (1 - WI) * WJ + f[I0 + 1, J0 + 1] * WI * WJ)
-    outside = (xs < 0) | (xs > field.shape[0] * dx)
+    outside = (xs < xc0 - dx) | (xs > xc0 + field.shape[0] * dx)
     out[:, outside] = 0
     return out
 
@@ -180,8 +198,9 @@ _outline_cache = {}
 
 def engine_layer(view, size):
     """RGBA layer with the engine drawn as a dark body with light outline."""
-    key = (view, size)
+    key = (tuple(round(v, 4) for v in view), size)
     if key in _outline_cache: return _outline_cache[key]
+    if len(_outline_cache) > 8: _outline_cache.clear()
     w, h = size
     ss = 3
     x0, x1, rmax = view
@@ -218,7 +237,8 @@ def render_sim(run, tn, view, size):
     im = Image.fromarray(rgb.astype(np.uint8), "RGB")
     glow = im.filter(ImageFilter.GaussianBlur(radius=max(3, w / 160)))
     im = Image.blend(im, Image.fromarray(np.maximum(np.asarray(im), np.asarray(glow)), "RGB"), 0.55)
-    im.paste(engine_layer(view, size), (0, 0), engine_layer(view, size))
+    lay = engine_layer(view, size)
+    im.paste(lay, (0, 0), lay)
     return im
 
 
@@ -246,53 +266,102 @@ class Footage:
 
 
 # ------------------------------------------------------------------ timeline
-A_END = 9.6
-X_FADE = 0.7
-B0 = A_END + X_FADE
-B_DUR = 16.6
-LOOP = 0.6
-TOTAL = B0 + B_DUR + LOOP
-FOOT_START = 3.0
+# Same rhythm as the reference: one continuous take, no restart of the sim.
+T_A_END = 8.6       # part A: close-up, slow pull-back, three captions
+T_TR_END = 9.25     # header/title fade, panel moves up, footage fades in
+T_FLASH = 10.25     # sim panel flashes when the real engine reaches full flow
+T_B_END = 22.3      # end of part B
+T_RW_END = 23.25    # rewind + push-in back to the first frame
+TOTAL = 23.8
+FOOT_SYNC = 6.35    # footage time of full flow, shown at T_FLASH
 
-VIEW_A = (0.3, 11.6, (11.6 - 0.3) * 843 / 1080 / 2)
-SIZE_A = (1080, 843)
-SIZE_B = (1080, 560)
-VIEW_B = (0.3, 14.0, (14.0 - 0.3) * 560 / 1080 / 2)
-T_ALT0 = 4.8
+PANEL_A = (492, 843)
+PANEL_B = (322, 560)
+VIEW_A0 = (2.4, 8.1)
+VIEW_A1 = (0.3, 11.6)
+VIEW_B = (0.3, 14.0)
 
-SIM_A = [(0.0, 0.0), (1.8, 0.30), (4.2, 0.82), (6.8, 1.45), (A_END, 2.30)]
-SIM_B = [(0.0, 0.0), (4.5, 1.25), (9.4, 4.8), (13.8, 6.8), (B_DUR, 7.4)]
+SIM_MAP = [(0.0, 0.22), (3.0, 0.69), (4.4, 0.86), (7.0, 1.22), (T_A_END, 1.45), (T_TR_END, 1.55),
+           (T_FLASH, 1.76), (13.75, 2.6), (T_B_END, 4.75), (T_RW_END, 0.9), (TOTAL, 0.22)]
 
-CAP_A = [(0.0, 2.1, "Methane and oxygen burn in a ring-shaped chamber."),
-         (2.1, 4.3, "It chokes at the annular throat and goes supersonic."),
-         (4.3, 6.8, "There's no bell. The gas expands along the spike."),
-         (6.8, A_END, "The outer wall of this nozzle is the air itself.")]
-CAP_B = [(0.0, 2.4, "Same start, next to the real 20 kN hot fire."),
-         (2.4, 4.8, "The jet leaves the ring and runs along the spike."),
-         (4.8, 7.2, "Outside there's no wall: air pressure sets the edge."),
-         (7.2, 9.4, "Expansion and compression waves cross the plume."),
-         (9.4, 11.8, "Climb out of the air and the plume opens by itself."),
-         (11.8, 14.2, "That's altitude compensation. No bell needed."),
-         (14.2, B_DUR, "Next: XRA-2E5, 200 kN, 1 m tall, printed in one piece.")]
+TYPE_RATE = 46.0    # characters per second
+CAPS_A = [(0.25, "Methane and oxygen burn in a ring-shaped chamber."),
+          (3.1, "It chokes at the annular throat and goes supersonic."),
+          (7.0, "The jet leaves the ring and runs down the spike.")]
+CAPS_B = [(10.5, "A dim violet jet first, then the full flow, in both."),
+          (12.25, "There's no bell, so the air itself is the outer wall."),
+          (13.75, "Waves bounce between spike and air and cross the plume."),
+          (16.5, ("It pinches shut past the tip", 17.0, ", in the solve and on the stand.")),
+          (20.0, None)]                       # closing line, filled in with the sim length
+CAP_FADE_B = (19.45, 19.75)
+
+SIZE_FOOT = (1080, 639)
+CREDITS = ["FOOTAGE · LEAP 71 (@LEAP.71), 20 kN METHALOX AEROSPIKE HOT FIRE",
+           "SIM · 2D AXISYMMETRIC EULER, SHAPE TRACED FROM THE ENGINE",
+           "Pc 50 bar (LEAP71.COM) · THRUST SCALED TO 20 kN AT SEA LEVEL"]
+FB_B = (6.3, 1.7)      # annotation anchors (x, r), from the solution
+WV_B = (5.4, 0.85)
+PC_B = None            # set at start-up from the solution (where the plume closes)
 
 
-def caption_at(caps, t):
-    for a, b, s in caps:
-        if a <= t < b:
-            fa = min(1, (t - a) / 0.25, (b - t) / 0.2) if b - a > 0.5 else 1
-            return s, max(0.0, fa)
-    return None, 0
+def smooth_step(t, a, b):
+    return ease((t - a) / (b - a)) if b > a else float(t >= a)
 
 
-def slower(map_pts, t, run):
+def view_at(t):
+    def mix(v0, v1, s):
+        c0, c1 = (v0[0] + v0[1]) / 2, (v1[0] + v1[1]) / 2
+        w0, w1 = v0[1] - v0[0], v1[1] - v1[0]
+        c = c0 + (c1 - c0) * s
+        w = math.exp(math.log(w0) + (math.log(w1) - math.log(w0)) * s)
+        return (c - w / 2, c + w / 2)
+    if t < 2.9: return VIEW_A0
+    if t < T_A_END: return mix(VIEW_A0, VIEW_A1, smooth_step(t, 2.9, T_A_END))
+    if t < T_TR_END: return mix(VIEW_A1, VIEW_B, smooth_step(t, T_A_END, T_TR_END))
+    if t < T_B_END: return VIEW_B
+    if t < T_RW_END: return mix(VIEW_B, VIEW_A0, smooth_step(t, T_B_END, T_RW_END))
+    return VIEW_A0
+
+
+def panel_at(t):
+    if t < T_A_END or t >= T_RW_END - 0.15: s = 0.0
+    elif t < T_TR_END: s = smooth_step(t, T_A_END, T_TR_END)
+    elif t < T_B_END: s = 1.0
+    else: s = 1 - smooth_step(t, T_B_END, T_RW_END - 0.15)
+    y = PANEL_A[0] + (PANEL_B[0] - PANEL_A[0]) * s
+    h = PANEL_A[1] + (PANEL_B[1] - PANEL_A[1]) * s
+    return int(round(y)), int(round(h)), s
+
+
+def sim_time(t):
+    return lerp_map(t, SIM_MAP)
+
+
+def slower(t, run):
     dt_v = 1 / FPS
-    s0 = lerp_map(t, map_pts); s1 = lerp_map(t + dt_v, map_pts)
-    phys = (s1 - s0) * run.t_unit
+    phys = abs(sim_time(t + dt_v) - sim_time(t)) * run.t_unit
     return dt_v / phys if phys > 0 else 0
 
 
-def header(d, right, prog):
-    spaced(d, (980, 244), right, F_LABEL, LAV, 2.2, "r")
+def typed(caps, t):
+    """Typewriter caption: the newest caption that has started, typed out."""
+    cur = None
+    for c in caps:
+        if t >= c[0]: cur = c
+    if cur is None or cur[1] is None:
+        return None
+    t0, text = cur
+    if isinstance(text, tuple):
+        a, t1, b = text
+        n_a = min(len(a), int((t - t0) * TYPE_RATE))
+        if t < t1: return a[:n_a]
+        return a + b[:max(0, int((t - t1) * TYPE_RATE))]
+    return text[:max(0, int((t - t0) * TYPE_RATE))]
+
+
+def header(d, right, prog, a_right=1.0):
+    if right and a_right > 0:
+        spaced(d, (980, 244), right, F_LABEL, alpha_blend(LAV, a_right), 2.2, "r")
     y = 290
     d.line([(100, y), (980, y)], fill=(70, 67, 88), width=1)
     for i in range(0, 89):
@@ -303,34 +372,35 @@ def header(d, right, prog):
     d.line([(xm, y + 6), (xm, y - 18)], fill=INK, width=2)
 
 
-def sparkline(d, run, t_now, t_max, box):
+def sparkline(d, run, t_now, t_max, box, a):
     x0, y0, x1, y1 = box
     ts = run.t[run.t <= t_max]
+    d.line([(x0, y1), (x1, y1)], fill=alpha_blend((52, 50, 68), a), width=1)
     for arr, col, lo, hi in [(run.Tch, (210, 206, 225), 1, 12.5), (run.pch, LAV, 1, 52)]:
         pts = []
         for tt in ts:
             if tt > t_now: break
             v = np.interp(tt, run.t, arr)
             pts.append((x0 + (x1 - x0) * tt / t_max, y1 - (y1 - y0) * (v - lo) / (hi - lo)))
-        d.line([(x0, y1), (x1, y1)], fill=(52, 50, 68), width=1)
         if len(pts) > 1:
-            d.line(pts, fill=col, width=2)
-            d.ellipse([pts[-1][0] - 4, pts[-1][1] - 4, pts[-1][0] + 4, pts[-1][1] + 4], fill=col)
+            c = alpha_blend(col, a)
+            d.line(pts, fill=c, width=2)
+            d.ellipse([pts[-1][0] - 4, pts[-1][1] - 4, pts[-1][0] + 4, pts[-1][1] + 4], fill=c)
 
 
-def stat_block(d, x, y, label, val, unit, fv=F_VAL):
-    spaced(d, (x, y), label, F_SMALL, DIM, 1.5)
-    d.text((x, y + 20), val, font=fv, fill=INK)
-    wv = d.textlength(val, font=fv)
-    d.text((x + wv + 6, y + 20 + fv.size * 0.62), unit, font=F_UNIT, fill=DIM)
+def stat_block(d, x, y, label, val, unit, a):
+    spaced(d, (x, y), label, F_SMALL, alpha_blend(DIM, a), 1.5)
+    d.text((x, y + 20), val, font=F_VAL, fill=alpha_blend(INK, a))
+    wv = d.textlength(val, font=F_VAL)
+    d.text((x + wv + 6, y + 20 + F_VAL.size * 0.62), unit, font=F_UNIT, fill=alpha_blend(DIM, a))
 
 
-def inline_stat(d, x, y, label, val, unit):
-    w = spaced(d, (x, y + 13), label, F_SMALL, DIM, 1.5)
+def inline_stat(d, x, y, label, val, unit, a):
+    w = spaced(d, (x, y + 13), label, F_SMALL, alpha_blend(DIM, a), 1.5)
     x += w + 10
-    d.text((x, y), val, font=F_VALB, fill=INK)
+    d.text((x, y), val, font=F_VALB, fill=alpha_blend(INK, a))
     x += d.textlength(val, font=F_VALB) + 5
-    d.text((x, y + 13), unit, font=F_UNIT, fill=DIM)
+    d.text((x, y + 13), unit, font=F_UNIT, fill=alpha_blend(DIM, a))
     return x + d.textlength(unit, font=F_UNIT)
 
 
@@ -359,107 +429,6 @@ def annotate(d, view, size, origin, x, r, label, a, side="up", length=60):
         spaced(d, (tx, py - 10), label, F_ANN, col, 1.6, "r" if side == "left" else "l", stroke=3)
 
 
-def ann_alpha(t, a, b):
-    return ease((t - a) / 0.3) * ease((b - t) / 0.3)
-
-
-# ------------------------------------------------------------------ frames
-def frame_A(run, t, out=None):
-    im = Image.new("RGB", (W, H), BG)
-    tn = lerp_map(t, SIM_A)
-    sim = render_sim(run, tn, VIEW_A, SIZE_A)
-    oy = 492
-    im.paste(sim, (0, oy))
-    d = ImageDraw.Draw(im)
-    header(d, "SIMULATION", t / TOTAL)
-    d.text((100, 300), "How an aerospike starts", font=F_TITLE, fill=INK)
-    d.text((100, 392), "the Noyron aerospike LEAP 71 fired, scaled to the 200 kN XRA-2E5",
-           font=font("serifi", 28), fill=(170, 166, 186))
-    # annotations
-    org = (0, oy)
-    thr_pt = G.E + G.S_THR * G.D
-    annotate(d, VIEW_A, SIZE_A, org, G.CH_X + 0.25, G.CH_R + 0.22, "TOROIDAL CHAMBER", ann_alpha(t, 0.3, 2.1), "right", 230)
-    annotate(d, VIEW_A, SIZE_A, org, thr_pt[0], -thr_pt[1], "ANNULAR THROAT", ann_alpha(t, 2.2, 4.3), "right", 110)
-    annotate(d, VIEW_A, SIZE_A, org, 5.4, -G.r_spike(5.4), "SPIKE", ann_alpha(t, 4.4, 6.8), "down", 70)
-    annotate(d, VIEW_A, SIZE_A, org, FB_A[0], FB_A[1], "FREE BOUNDARY: AIR", ann_alpha(t, 6.9, 9.4), "up", 50)
-    # time row
-    y = 1360
-    ms = tn * run.t_unit * 1e3
-    spaced(d, (100, y), f"T+ {ms:.3f} ms", F_LABEL, (205, 201, 218), 1.6)
-    spaced(d, (980, y), f"{fmt(slower(SIM_A, t, run))}× SLOWER", F_LABEL, LAV, 1.6, "r")
-    cap, ca = caption_at(CAP_A, t)
-    if cap: d.text((100, 1398), cap, font=F_CAP, fill=alpha_blend(INK, ca))
-    # stats
-    y = 1470
-    thr = max(0.0, run.stat(tn, run.thrust_s)) * run.kN
-    me = run.stat(tn, run.mach_s)
-    tc = run.stat(tn, run.Tch) * T_AMB
-    pc = run.stat(tn, run.pch) * 1.01325
-    stat_block(d, 100, y, "THRUST", fmt(thr), "kN")
-    stat_block(d, 320, y, "EXIT MACH", f"{me:.2f}", "")
-    stat_block(d, 530, y, "CHAMBER", fmt(tc), "K")
-    stat_block(d, 770, y, "Pc", f"{pc:.1f}", "bar")
-    sparkline(d, run, tn, SIM_A[-1][1], (100, 1575, 930, 1610))
-    spaced(d, (100, 1624), "CHAMBER TEMP", F_TINY, (150, 146, 166), 1.4)
-    spaced(d, (290, 1624), "CHAMBER PRESSURE", F_TINY, (140, 126, 200), 1.4)
-    return im
-
-
-def frame_B(run, foot, t, t_global):
-    im = Image.new("RGB", (W, H), BG)
-    tn = lerp_map(t, SIM_B)
-    oy = 322
-    sim = render_sim(run, tn, VIEW_B, SIZE_B)
-    im.paste(sim, (0, oy))
-    fy = 1012
-    fi = int(round(t * FPS))
-    fr = foot.frame_at(fi)
-    im.paste(fr, (0, fy))
-    im.paste(Image.new("RGB", (W, 130), (6, 5, 14)), (0, fy), _shade_mask())
-    d = ImageDraw.Draw(im)
-    header(d, "SIMULATION VS REAL", t_global / TOTAL)
-    # sim labels
-    spaced(d, (100, oy + 24), "SIMULATION", F_LABEL, (205, 201, 218), 2.0, stroke=4)
-    ms = tn * run.t_unit * 1e3
-    pa = run.stat(tn, run.pa)
-    if tn < T_ALT0:
-        rt = f"T+ {ms:.2f} ms · {fmt(slower(SIM_B, t, run))}× SLOWER"
-    else:
-        rt = f"AMBIENT {pa:.2f} atm"
-    spaced(d, (980, oy + 24), rt, F_LABEL, LAV, 1.6, "r", stroke=4)
-    org = (0, oy)
-    v, s = VIEW_B, SIZE_B
-    annotate(d, v, s, org, G.X_LIP + 0.25, -(G.r_spike(G.X_LIP + 0.25) + 0.05), "ANNULAR JET", ann_alpha(t, 2.5, 4.8), "left", 70)
-    annotate(d, v, s, org, FB_B[0], FB_B[1], "FREE BOUNDARY", ann_alpha(t, 4.9, 7.2), "up", 50)
-    annotate(d, v, s, org, G.X_SPIKE_END + 0.25, 0.0, "BASE WAKE", ann_alpha(t, 4.9, 7.2), "right", 90)
-    annotate(d, v, s, org, WV_B[0], -WV_B[1], "WAVES", ann_alpha(t, 7.3, 9.4), "left", 105)
-    annotate(d, v, s, org, PO_B[0], PO_B[1], "PLUME OPENS", ann_alpha(t, 10.4, 14.1), "up", 40)
-    # caption + stats
-    cap, ca = caption_at(CAP_B, t)
-    if cap: d.text((100, 896), cap, font=F_CAPB, fill=alpha_blend(INK, ca))
-    y = 950
-    thr = max(0.0, run.stat(tn, run.thrust_s)) * run.kN
-    pc = run.stat(tn, run.pch) * 1.01325
-    me = run.stat(tn, run.mach_s)
-    x = inline_stat(d, 100, y, "THRUST", fmt(thr), "kN")
-    x = inline_stat(d, x + 26, y, "Pc", f"{pc:.1f}", "bar")
-    x = inline_stat(d, x + 26, y, "MACH", f"{me:.2f}", "")
-    x = inline_stat(d, x + 26, y, "AIR", f"{pa:.2f}", "atm")
-    # footage labels
-    spaced(d, (100, fy + 22), "REAL · LEAP 71 20 kN METHALOX AEROSPIKE", F_LABEL, (236, 232, 244), 2.0, stroke=3)
-    spaced(d, (100, fy + 52), "HOT FIRE · THE 200 kN XRA-2E5 IS NEXT", F_SMALL, (214, 210, 228), 1.5, stroke=3)
-    # credits
-    cy = fy + SIZE_FOOT[1] + 18
-    for i, line in enumerate(CREDITS):
-        spaced(d, (980, cy + i * 21), line, F_TINY, (88, 85, 106), 1.3, "r")
-    return im
-
-
-SIZE_FOOT = (1080, 639)
-FB_A = (6.0, 1.75)     # annotation anchors (x, r), set from the solution
-FB_B = (6.3, 1.7)
-WV_B = (5.4, 0.85)
-PO_B = (5.6, 2.0)
 _shade = None
 
 
@@ -469,45 +438,125 @@ def _shade_mask():
         a = (np.linspace(1, 0, 130) ** 1.3 * 215).astype(np.uint8)
         _shade = Image.fromarray(np.repeat(a[:, None], W, 1), "L")
     return _shade
-CREDITS = ["FOOTAGE · LEAP 71 (@LEAP.71), 20 kN METHALOX AEROSPIKE HOT FIRE",
-           "SIM · 2D AXISYMMETRIC EULER, GAMMA 1.2, SHAPE TRACED FROM THE 20 kN ENGINE",
-           "SPECS · LEAP71.COM: XRA-2E5, 200 kN, CH4/LOX, 1 m, INCONEL 718",
-           "Pc 50 bar (20 kN ENGINE) · THRUST SCALED TO 200 kN IN VACUUM"]
 
 
 def make_frame(run, foot, n):
     t = n / FPS
-    if t < A_END:
-        return frame_A(run, t)
-    if t < B0:
-        a = ease((t - A_END) / X_FADE)
-        fa = frame_A(run, A_END - 1e-3)
-        fb = frame_B(run, foot, 0.0, t)
-        return Image.blend(fa, fb, a)
-    if t < B0 + B_DUR:
-        return frame_B(run, foot, t - B0, t)
-    a = ease((t - B0 - B_DUR) / LOOP)
-    fb = frame_B(run, foot, B_DUR - 1e-3, t)
-    return Image.blend(fb, frame_A(run, 0.0), a)
+    tn = sim_time(t)
+    py, ph, ps = panel_at(t)
+    x0, x1 = view_at(t)
+    view = (x0, x1, (x1 - x0) * ph / W / 2)
+    size = (W, ph)
+    im = Image.new("RGB", (W, H), BG)
+
+    # alphas
+    aA = 1 - smooth_step(t, T_A_END, T_A_END + 0.3) if t < T_B_END else smooth_step(t, T_RW_END - 0.25, T_RW_END)
+    aB = smooth_step(t, T_TR_END - 0.25, T_TR_END + 0.05) * (1 - smooth_step(t, T_B_END, T_B_END + 0.3))
+    aF = smooth_step(t, 9.0, 9.4) * (1 - smooth_step(t, T_B_END, T_B_END + 0.45))
+
+    # footage (bottom), fades in from black
+    fy = 1012
+    if aF > 0:
+        fr = foot.frame_at(int(round((t - 9.0) * FPS)))
+        fr = Image.blend(Image.new("RGB", SIZE_FOOT, BG), fr, aF)
+        im.paste(fr, (0, fy))
+        im.paste(Image.new("RGB", (W, 130), (6, 5, 14)), (0, fy), _shade_mask().point(lambda v: int(v * aF)))
+
+    sim = render_sim(run, tn, view, size)
+    # flash when the real engine reaches full flow
+    fl = 0.0
+    if T_FLASH - 0.08 <= t < T_FLASH + 0.6:
+        fl = 0.62 * (smooth_step(t, T_FLASH - 0.08, T_FLASH) if t < T_FLASH else math.exp(-(t - T_FLASH) / 0.16))
+    if fl > 0:
+        sim = Image.blend(sim, Image.new("RGB", size, (236, 232, 244)), fl)
+    im.paste(sim, (0, py))
+    d = ImageDraw.Draw(im)
+
+    right = "SIMULATION" if ps < 0.5 else "SIMULATION VS REAL"
+    header(d, right, t / TOTAL, 1.0 if abs(ps - 0.5) > 0.2 else abs(ps - 0.5) / 0.2)
+
+    # ---------------- part A overlays
+    if aA > 0:
+        d.text((100, 300), "How an aerospike starts", font=F_TITLE, fill=alpha_blend(INK, aA))
+        d.text((100, 392), "LEAP 71's 20 kN Noyron aerospike: simulated, then the real test",
+               font=font("serifi", 28), fill=alpha_blend((170, 166, 186), aA))
+        ms = tn * run.t_unit * 1e3
+        y = py + ph + 25
+        spaced(d, (100, y), f"T+ {ms:.3f} ms", F_LABEL, alpha_blend((205, 201, 218), aA), 1.6)
+        spaced(d, (980, y), f"{fmt(slower(t, run))}× SLOWER", F_LABEL, alpha_blend(LAV, aA), 1.6, "r")
+        if t < T_B_END:
+            cap = typed(CAPS_A, t)
+            if cap: d.text((100, y + 38), cap, font=F_CAP, fill=alpha_blend(INK, aA))
+        y += 110
+        thr = max(0.0, run.stat(tn, run.thrust_s)) * run.kN
+        stat_block(d, 100, y, "THRUST", f"{thr:.1f}", "kN", aA)
+        stat_block(d, 320, y, "EXIT MACH", f"{run.stat(tn, run.mach_s):.2f}", "", aA)
+        stat_block(d, 530, y, "CHAMBER", fmt(run.stat(tn, run.Tch) * T_AMB), "K", aA)
+        stat_block(d, 770, y, "Pc", f"{run.stat(tn, run.pch) * 1.01325:.1f}", "bar", aA)
+        sparkline(d, run, tn, SIM_MAP[4][1], (100, y + 105, 930, y + 140), aA)
+        spaced(d, (100, y + 154), "CHAMBER TEMP", F_TINY, alpha_blend((150, 146, 166), aA), 1.4)
+        spaced(d, (290, y + 154), "CHAMBER PRESSURE", F_TINY, alpha_blend((140, 126, 200), aA), 1.4)
+
+    # ---------------- part B overlays
+    if aB > 0:
+        py, ph = PANEL_B          # part-B text sits at its final place while it fades in
+        org = (0, py)
+        spaced(d, (100, py + 24), "SIMULATION", F_LABEL, alpha_blend((205, 201, 218), aB), 2.0, stroke=4)
+        ms = tn * run.t_unit * 1e3
+        spaced(d, (980, py + 24), f"T+ {ms:.2f} ms · {fmt(slower(t, run))}× SLOWER", F_LABEL,
+               alpha_blend(LAV, aB), 1.6, "r", stroke=4)
+        annotate(d, view, size, org, FB_B[0], FB_B[1], "FREE BOUNDARY",
+                 aB * smooth_step(t, 12.5, 12.8), "up", 50)
+        annotate(d, view, size, org, WV_B[0], -WV_B[1], "WAVES",
+                 aB * smooth_step(t, 14.0, 14.3), "left", 105)
+        annotate(d, view, size, org, PC_B[0], PC_B[1], "PLUME CLOSES",
+                 aB * smooth_step(t, 17.0, 17.3), "up", 70)
+        cap = typed(CAPS_B, t)
+        ca = aB * (1 - smooth_step(t, *CAP_FADE_B)) if t < CAPS_B[-1][0] else aB
+        if cap and ca > 0:
+            d.text((100, py + ph + 14), cap, font=F_CAPB, fill=alpha_blend(INK, ca))
+        y = py + ph + 68
+        thr = max(0.0, run.stat(tn, run.thrust_s)) * run.kN
+        x = inline_stat(d, 100, y, "THRUST", f"{thr:.1f}", "kN", aB)
+        x = inline_stat(d, x + 26, y, "Pc", f"{run.stat(tn, run.pch) * 1.01325:.1f}", "bar", aB)
+        x = inline_stat(d, x + 26, y, "MACH", f"{run.stat(tn, run.mach_s):.2f}", "", aB)
+        x = inline_stat(d, x + 26, y, "EXIT", f"{run.stat(tn, run.exit_p):.2f}", "atm", aB)
+    if aF > 0:
+        spaced(d, (100, fy + 22), "REAL · LEAP 71 20 kN AEROSPIKE", F_LABEL, alpha_blend((236, 232, 244), aF), 2.0, stroke=3)
+        spaced(d, (980, fy + 22), "REAL TIME", F_LABEL, alpha_blend((236, 232, 244), aF), 2.0, "r", stroke=3)
+        cy = fy + SIZE_FOOT[1] + 18
+        for i, line in enumerate(CREDITS):
+            spaced(d, (980, cy + i * 21), line, F_TINY, alpha_blend((96, 93, 114), aF), 1.3, "r")
+    return im
+
+
+def find_closure(run):
+    """Axis point behind the spike tip where the plume closes (steady sea level)."""
+    k = run.idx(4.4)
+    rho, p, y = run.fields(k)
+    i0 = int((G.X_SPIKE_END + 0.2) / run.dx)
+    j = 3
+    yy = y[i0:, j]
+    hit = np.where(yy > 0.5)[0]
+    x = G.X_SPIKE_END + 1.2 if len(hit) == 0 else run.xc[i0 + hit[0]]
+    return (float(min(x, VIEW_B[1] - 1.5)), 0.0)
 
 
 def main():
+    global PC_B
     run_dir, footage, out = sys.argv[1:4]
     run = Run(run_dir)
-    print(f"L0 = {run.L0:.4f} m, time unit = {run.t_unit * 1e3:.4f} ms, total sim "
-          f"{run.t[-1] * run.t_unit * 1e3:.2f} ms, engine length "
-          f"{(G.X_SPIKE_END - G.X_T) * run.L0:.2f} m spike, body dia {2 * G.R_MAX * run.L0:.2f} m, "
-          f"sea-level thrust {run.stat(5.4, run.thrust_s) * run.kN:.0f} kN", flush=True)
+    PC_B = find_closure(run)
+    total_ms = SIM_MAP[-3][1] * run.t_unit * 1e3
+    CAPS_B[-1] = (20.0, f"The whole simulation is {total_ms:.1f} ms, quicker than a blink.")
+    print(f"L0 = {run.L0:.4f} m, time unit = {run.t_unit * 1e3:.4f} ms, shown sim {total_ms:.2f} ms, "
+          f"plume closes at x = {PC_B[0]:.2f}", flush=True)
+    foot = Footage(footage, FOOT_SYNC + (9.0 - T_FLASH), 14.5, SIZE_FOOT)
     if "--preview" in sys.argv:
         ts = [float(v) for v in sys.argv[sys.argv.index("--preview") + 1].split(",")]
-        foot = Footage(footage, FOOT_START, B_DUR, SIZE_FOOT)
         for t in sorted(ts):
-            n = int(t * FPS)
-            if t >= B0:
-                foot.frame_at(int((t - B0) * FPS))
-            make_frame(run, foot, n).save(out.replace(".mp4", f"_{t:05.2f}.png"))
+            make_frame(run, foot, int(round(t * FPS))).save(out.replace(".mp4", f"_{t:05.2f}.png"))
         return
-    foot = Footage(footage, FOOT_START, B_DUR, SIZE_FOOT)
     nframes = int(round(TOTAL * FPS))
     tmp = out + ".video.mp4"
     enc = subprocess.Popen(["ffmpeg", "-v", "error", "-y", "-f", "rawvideo", "-pix_fmt", "rgb24",
@@ -518,7 +567,6 @@ def main():
         enc.stdin.write(make_frame(run, foot, n).tobytes())
         if n % 60 == 0: print("frame", n, "/", nframes, flush=True)
     enc.stdin.close(); enc.wait()
-    # audio: synthesized rumble for part A, the hot-fire's own sound for part B
     make_audio(run, footage, out + ".audio.wav")
     subprocess.check_call(["ffmpeg", "-v", "error", "-y", "-i", tmp, "-i", out + ".audio.wav",
                            "-c:v", "copy", "-c:a", "aac", "-b:a", "192k", "-shortest", out])
@@ -527,31 +575,29 @@ def main():
 
 
 def make_audio(run, footage, path):
+    """Rumble that follows the simulated chamber pressure, then the hot fire's own sound."""
     sr = 48000
     n = int(TOTAL * sr)
     rng = np.random.default_rng(7)
-    # brown-ish noise rumble following simulated chamber pressure in part A
-    wn = rng.standard_normal(n)
-    br = np.cumsum(wn); br -= np.convolve(br, np.ones(4801) / 4801, mode="same")
+    br = np.cumsum(rng.standard_normal(n)); br -= np.convolve(br, np.ones(4801) / 4801, mode="same")
     br /= np.abs(br).max() + 1e-9
     tt = np.arange(n) / sr
-    tn = np.interp(tt, [p[0] for p in SIM_A], [p[1] for p in SIM_A])
-    env = np.interp(tn, run.t, run.pch) / 50.0
-    env = np.clip(env, 0, 1) ** 0.8 * (tt < A_END + X_FADE)
-    env *= np.clip((A_END + X_FADE - tt) / X_FADE, 0, 1)
-    rumble = br * env * 0.35
-    # footage audio
-    raw = subprocess.run(["ffmpeg", "-v", "error", "-ss", str(FOOT_START - X_FADE), "-t", str(B_DUR + LOOP + X_FADE),
+    tn = np.interp(tt, [p[0] for p in SIM_MAP], [p[1] for p in SIM_MAP])
+    env = np.clip(np.interp(tn, run.t, run.pch) / 50.0, 0, 1) ** 0.8
+    gate = 1 - np.clip((tt - 9.0) / 0.5, 0, 1) + np.clip((tt - T_B_END) / 0.6, 0, 1)
+    rumble = br * env * np.clip(gate, 0, 1) * 0.35
+    s0 = 9.0
+    raw = subprocess.run(["ffmpeg", "-v", "error", "-ss", str(FOOT_SYNC + (s0 - T_FLASH)), "-t", str(TOTAL - s0),
                           "-i", footage, "-ac", "2", "-ar", str(sr), "-f", "f32le", "-"],
                          capture_output=True).stdout
     fa = np.frombuffer(raw, np.float32).reshape(-1, 2)
     mix = np.zeros((n, 2), np.float32)
     mix[:, 0] += rumble; mix[:, 1] += rumble
-    s0 = int((B0 - X_FADE) * sr)
-    m = min(len(fa), n - s0)
-    fade = np.clip(np.arange(m) / (X_FADE * sr), 0, 1)[:, None]
-    tail = np.clip((n - s0 - np.arange(m)) / (LOOP * sr), 0, 1)[:, None]
-    mix[s0:s0 + m] += fa[:m] * fade * tail
+    i0 = int(s0 * sr)
+    m = min(len(fa), n - i0)
+    tl = tt[i0:i0 + m]
+    g = (np.clip((tl - s0) / 0.4, 0, 1) * (1 - np.clip((tl - T_B_END) / 0.6, 0, 1)))[:, None]
+    mix[i0:i0 + m] += fa[:m] * g
     mix = np.clip(mix, -1, 1)
     subprocess.run(["ffmpeg", "-v", "error", "-y", "-f", "f32le", "-ar", str(sr), "-ac", "2", "-i", "-", path],
                    input=mix.astype(np.float32).tobytes(), check=True)
