@@ -1,34 +1,36 @@
-"""Aerospike half-section traced from the Aspire / LEAP 71 XRA-2E5 render.
+"""Aerospike half-section traced from LEAP 71's hot-fired 20 kN methalox engine.
 
 Lengths are in simulation units L0 = spike root radius.  x = engine axis
 (flow goes +x), r = radius.  The same polygon drives the solver mask
 (setup_case.py) and the outline in the video (make_video.py).
 
-From the turntable render (Aspire_engine_turntable_4K.mp4), measured in
-units of the spike root radius:
-  * the spike leaves the flat bottom face of a turned ring, root slope ~29 deg,
-    gently concave, length ~2.06, truncated at r ~0.27
-  * ring radius ~1.8 below a flange (~2.1), main body ~2.3 (inside the lattice)
+From LEAP 71's photo of the three Noyron aerospikes (the 20 kN methalox
+engine in the middle, the one in the hot-fire footage), in units of the
+spike root radius:
+  * an urn-shaped body: ~3.1 at the top, bulging to ~4.1 near the bottom,
+    with a rounded corner into an almost flat bottom face
+  * a short, stubby, slightly concave spike: root slope ~20 deg,
+    length ~1.73, truncated at r ~0.56
 The inside is not visible, so the toroidal chamber and the annular feed slot
-(throat just inside the ring, small internal expansion to the ring face,
-exit aligned with the spike root) are a plausible layout, not LEAP 71's.
+(throat just inside the bottom face, small internal expansion, exit aligned
+with the spike root) are a plausible layout, not LEAP 71's.
 """
 import numpy as np
 
 GAM = 1.2
 
 # ------------------------------------------------------------ spike (measured)
-_S = np.array([0, 42, 92, 142, 192, 242, 292, 342, 392, 442, 462]) / 224.0
-_R = np.array([224, 201, 176, 155, 136, 119, 104, 90, 77, 65, 60]) / 224.0
+_S = np.array([0.0, 0.27, 0.53, 0.80, 1.07, 1.33, 1.60, 1.73])
+_R = np.array([1.00, 0.90, 0.81, 0.74, 0.675, 0.615, 0.565, 0.55])
 
-X_LIP = 2.60           # ring bottom face (exit plane of the slot)
+X_LIP = 4.50           # flat bottom face (exit plane of the slot)
 R_LIP = 1.10           # outer lip of the annular slot
-THETA = np.radians(29.0)  # slot / jet direction, inward from the axis
+THETA = np.radians(22.0)  # slot / jet direction, inward from the axis
 D = np.array([np.cos(THETA), -np.sin(THETA)])   # flow direction in the slot
 N = np.array([np.sin(THETA), np.cos(THETA)])    # across the slot (inner -> lip)
 
-W_EXIT = 0.055         # half-width at the ring face
-W_THR = 0.030          # half-width at the throat
+W_EXIT = 0.058         # half-width at the bottom face
+W_THR = 0.034          # half-width at the throat
 S_THR = -0.22          # throat position along the slot (upstream of the face)
 L_P = 0.80             # slot length
 W_P1 = 0.15            # half-width where the slot meets the chamber
@@ -46,18 +48,17 @@ SPIKE_X, SPIKE_R = _xf, _rf
 X_SPIKE_END = SPIKE_X[-1]
 R_BASE = SPIKE_R[-1]
 
-# ------------------------------------------------------------ body
-R_BODY = 2.30          # main body (inside the lattice skin)
-R_FLANGE = 2.12
-R_RING = 1.80
-X_FLANGE0 = X_LIP - 0.42
-X_RING0 = X_LIP - 0.20
+# ------------------------------------------------------------ body (urn shape)
+R_MAX = 4.10           # bulge just above the bottom corner
+R_TOP = 3.30           # narrower towards the injector head (off-screen)
+R_FLAT = 2.40          # end of the flat bottom face
+X_BULGE = X_LIP - 1.90 # axial position of the widest point
 
 # toroidal chamber
+CH_X, CH_R, CH_AX, CH_AR = X_LIP - 0.75, 1.52, 0.42, 0.30
 _P1 = E - L_P * D
-CH_X, CH_R, CH_AX, CH_AR = X_LIP - 0.95, 1.62, 0.42, 0.30
 WALL = 0.12
-X_BACK = -0.5          # body continues upstream out of the domain
+X_BACK = -2.0          # body continues upstream out of the domain
 X_INJ = CH_X - CH_AX + 0.18
 
 GAP_T = 2 * W_THR
@@ -90,15 +91,23 @@ def _ang(p):
     return np.arctan2((p[1] - CH_R) / CH_AR, (p[0] - CH_X) / CH_AX)
 
 
+def r_body(x):
+    """Outer radius of the urn-shaped body upstream of the bottom corner."""
+    x = np.asarray(x, dtype=float)
+    t = np.clip((X_BULGE - x) / (X_BULGE - X_BACK), 0, 1)
+    return R_MAX - (R_MAX - R_TOP) * t ** 1.6
+
+
 def outline():
     """Closed polygon (x, r) of the metal half-section, chamber as a slit."""
-    c = 0.06
-    pts = [[X_BACK, 0.0], [X_BACK, R_BODY],
-           [X_FLANGE0 - c, R_BODY], [X_FLANGE0, R_BODY - c],          # body -> flange
-           [X_FLANGE0, R_FLANGE], [X_RING0 - 0.03, R_FLANGE],
-           [X_RING0, R_FLANGE - 0.03], [X_RING0, R_RING],            # flange -> ring
-           [X_LIP - 0.03, R_RING], [X_LIP, R_RING - 0.03],
-           [X_LIP, R_LIP + 0.004]]                                    # ring face to lip
+    pts = [[X_BACK, 0.0]]
+    xs = np.linspace(X_BACK, X_BULGE, 40)
+    pts += np.stack([xs, r_body(xs)], 1).tolist()
+    # rounded bottom corner: quarter ellipse from the bulge to the flat face
+    ax, ar = X_LIP - X_BULGE, R_MAX - R_FLAT
+    for a in np.linspace(np.pi / 2, 0, 40)[1:]:
+        pts.append([X_BULGE + ax * np.cos(a), R_FLAT + ar * np.sin(a)])
+    pts.append([X_LIP, R_LIP + 0.004])                       # flat face to the lip
     pts += [_pt(s, _halfw(s)).tolist() for s in np.linspace(0, -L_P, 40)]
     p_out = _pt(-L_P, _halfw(-L_P)); p_in = _pt(-L_P, -_halfw(-L_P))
     a0, a1 = _ang(p_out), _ang(p_in)

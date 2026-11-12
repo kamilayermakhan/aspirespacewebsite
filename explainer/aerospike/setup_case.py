@@ -7,7 +7,7 @@ import numpy as np
 import geometry as G
 
 P = dict(
-    DX=0.008, XMAX=11.5, RMAX=3.6,
+    DX=0.01, XMAX=14.0, RMAX=4.6,
     GAM=1.2,
     PC=53.2,         # reservoir; gives ~50 bar in the chamber
     TC=11.7,         # ~3500 K chamber / 300 K ambient

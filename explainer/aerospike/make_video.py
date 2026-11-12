@@ -38,23 +38,23 @@ for c in range(3):
 
 
 def font(name, size):
-    files = {"mono": "ibm-plex-mono-latin-400-normal.woff", "monom": "ibm-plex-mono-latin-500-normal.woff",
-             "serifb": "source-serif-4-latin-700-normal.woff", "serifi": "source-serif-4-latin-400-italic.woff",
-             "sans": "inter-latin-500-normal.woff", "sansr": "inter-latin-400-normal.woff"}
+    files = {"mono": "jost-latin-400-normal.woff", "monom": "jost-latin-500-normal.woff",
+             "serifb": "jost-latin-600-normal.woff", "serifi": "jost-latin-400-italic.woff",
+             "sans": "jost-latin-500-normal.woff", "sansr": "jost-latin-400-normal.woff"}
     return ImageFont.truetype(os.path.join(FONT, files[name]), size)
 
 
-F_LABEL = font("mono", 21)
-F_SMALL = font("mono", 15)
+F_LABEL = font("monom", 22)
+F_SMALL = font("monom", 16)
 F_TINY = font("mono", 14)
-F_TITLE = font("serifb", 56)
+F_TITLE = font("serifb", 60)
 F_SUB = font("serifi", 31)
-F_CAP = font("serifi", 33)
-F_CAPB = font("serifi", 31)
+F_CAP = font("serifi", 35)
+F_CAPB = font("serifi", 33)
 F_VAL = font("sans", 46)
 F_VALB = font("sans", 33)
 F_UNIT = font("sansr", 17)
-F_ANN = font("mono", 15)
+F_ANN = font("monom", 16)
 
 
 def spaced(d, xy, text, f, fill, sp=2.0, anchor="l", stroke=0):
@@ -254,10 +254,10 @@ LOOP = 0.6
 TOTAL = B0 + B_DUR + LOOP
 FOOT_START = 3.0
 
-VIEW_A = (0.9, 7.1, (7.1 - 0.9) * 843 / 1080 / 2)
+VIEW_A = (0.3, 11.6, (11.6 - 0.3) * 843 / 1080 / 2)
 SIZE_A = (1080, 843)
 SIZE_B = (1080, 560)
-VIEW_B = (0.9, 11.4, (11.4 - 0.9) * 560 / 1080 / 2)
+VIEW_B = (0.3, 14.0, (14.0 - 0.3) * 560 / 1080 / 2)
 T_ALT0 = 4.8
 
 SIM_A = [(0.0, 0.0), (1.8, 0.30), (4.2, 0.82), (6.8, 1.45), (A_END, 2.30)]
@@ -267,13 +267,13 @@ CAP_A = [(0.0, 2.1, "Methane and oxygen burn in a ring-shaped chamber."),
          (2.1, 4.3, "It chokes at the annular throat and goes supersonic."),
          (4.3, 6.8, "There's no bell. The gas expands along the spike."),
          (6.8, A_END, "The outer wall of this nozzle is the air itself.")]
-CAP_B = [(0.0, 2.4, "Same start, next to a real Noyron aerospike."),
+CAP_B = [(0.0, 2.4, "Same start, next to the real 20 kN hot fire."),
          (2.4, 4.8, "The jet leaves the ring and runs along the spike."),
          (4.8, 7.2, "Outside there's no wall: air pressure sets the edge."),
          (7.2, 9.4, "Expansion and compression waves cross the plume."),
          (9.4, 11.8, "Climb out of the air and the plume opens by itself."),
          (11.8, 14.2, "That's altitude compensation. No bell needed."),
-         (14.2, B_DUR, "XRA-2E5: 200 kN, 1 m tall, one printed Inconel part.")]
+         (14.2, B_DUR, "Next: XRA-2E5, 200 kN, 1 m tall, printed in one piece.")]
 
 
 def caption_at(caps, t):
@@ -292,7 +292,6 @@ def slower(map_pts, t, run):
 
 
 def header(d, right, prog):
-    spaced(d, (100, 244), "MADE WITH CLAUDE (AI)", F_LABEL, (205, 201, 218), 2.2)
     spaced(d, (980, 244), right, F_LABEL, LAV, 2.2, "r")
     y = 290
     d.line([(100, y), (980, y)], fill=(70, 67, 88), width=1)
@@ -374,14 +373,14 @@ def frame_A(run, t, out=None):
     d = ImageDraw.Draw(im)
     header(d, "SIMULATION", t / TOTAL)
     d.text((100, 300), "How an aerospike starts", font=F_TITLE, fill=INK)
-    d.text((100, 392), "modelled on LEAP 71's 200 kN XRA-2E5, then a real hot fire",
-           font=font("serifi", 27), fill=(170, 166, 186))
+    d.text((100, 392), "the Noyron aerospike LEAP 71 fired, scaled to the 200 kN XRA-2E5",
+           font=font("serifi", 28), fill=(170, 166, 186))
     # annotations
     org = (0, oy)
     thr_pt = G.E + G.S_THR * G.D
     annotate(d, VIEW_A, SIZE_A, org, G.CH_X + 0.25, G.CH_R + 0.22, "TOROIDAL CHAMBER", ann_alpha(t, 0.3, 2.1), "right", 230)
     annotate(d, VIEW_A, SIZE_A, org, thr_pt[0], -thr_pt[1], "ANNULAR THROAT", ann_alpha(t, 2.2, 4.3), "right", 110)
-    annotate(d, VIEW_A, SIZE_A, org, 3.9, -G.r_spike(3.9), "SPIKE", ann_alpha(t, 4.4, 6.8), "down", 70)
+    annotate(d, VIEW_A, SIZE_A, org, 5.4, -G.r_spike(5.4), "SPIKE", ann_alpha(t, 4.4, 6.8), "down", 70)
     annotate(d, VIEW_A, SIZE_A, org, FB_A[0], FB_A[1], "FREE BOUNDARY: AIR", ann_alpha(t, 6.9, 9.4), "up", 50)
     # time row
     y = 1360
@@ -416,7 +415,7 @@ def frame_B(run, foot, t, t_global):
     fi = int(round(t * FPS))
     fr = foot.frame_at(fi)
     im.paste(fr, (0, fy))
-    im.paste(Image.new("RGB", (W, 110), (6, 5, 14)), (0, fy), _shade_mask())
+    im.paste(Image.new("RGB", (W, 130), (6, 5, 14)), (0, fy), _shade_mask())
     d = ImageDraw.Draw(im)
     header(d, "SIMULATION VS REAL", t_global / TOTAL)
     # sim labels
@@ -430,7 +429,7 @@ def frame_B(run, foot, t, t_global):
     spaced(d, (980, oy + 24), rt, F_LABEL, LAV, 1.6, "r", stroke=4)
     org = (0, oy)
     v, s = VIEW_B, SIZE_B
-    annotate(d, v, s, org, 2.85, -(G.r_spike(2.85) + 0.05), "ANNULAR JET", ann_alpha(t, 2.5, 4.8), "left", 70)
+    annotate(d, v, s, org, G.X_LIP + 0.25, -(G.r_spike(G.X_LIP + 0.25) + 0.05), "ANNULAR JET", ann_alpha(t, 2.5, 4.8), "left", 70)
     annotate(d, v, s, org, FB_B[0], FB_B[1], "FREE BOUNDARY", ann_alpha(t, 4.9, 7.2), "up", 50)
     annotate(d, v, s, org, G.X_SPIKE_END + 0.25, 0.0, "BASE WAKE", ann_alpha(t, 4.9, 7.2), "right", 90)
     annotate(d, v, s, org, WV_B[0], -WV_B[1], "WAVES", ann_alpha(t, 7.3, 9.4), "left", 105)
@@ -447,8 +446,8 @@ def frame_B(run, foot, t, t_global):
     x = inline_stat(d, x + 26, y, "MACH", f"{me:.2f}", "")
     x = inline_stat(d, x + 26, y, "AIR", f"{pa:.2f}", "atm")
     # footage labels
-    spaced(d, (100, fy + 22), "REAL · LEAP 71 AEROSPIKE HOT FIRE", F_LABEL, (225, 221, 236), 2.0)
-    spaced(d, (100, fy + 50), "AN EARLIER NOYRON ENGINE, NOT THE XRA-2E5", F_SMALL, (190, 186, 206), 1.5)
+    spaced(d, (100, fy + 22), "REAL · LEAP 71 20 kN METHALOX AEROSPIKE", F_LABEL, (236, 232, 244), 2.0, stroke=3)
+    spaced(d, (100, fy + 52), "HOT FIRE · THE 200 kN XRA-2E5 IS NEXT", F_SMALL, (214, 210, 228), 1.5, stroke=3)
     # credits
     cy = fy + SIZE_FOOT[1] + 18
     for i, line in enumerate(CREDITS):
@@ -457,23 +456,23 @@ def frame_B(run, foot, t, t_global):
 
 
 SIZE_FOOT = (1080, 639)
-FB_A = (3.6, 1.4)      # annotation anchors (x, r), set from the solution
-FB_B = (3.8, 1.35)
-WV_B = (3.3, 0.85)
-PO_B = (4.7, 1.8)
+FB_A = (6.0, 1.75)     # annotation anchors (x, r), set from the solution
+FB_B = (6.3, 1.7)
+WV_B = (5.4, 0.85)
+PO_B = (5.6, 2.0)
 _shade = None
 
 
 def _shade_mask():
     global _shade
     if _shade is None:
-        a = (np.linspace(1, 0, 110) ** 1.6 * 190).astype(np.uint8)
+        a = (np.linspace(1, 0, 130) ** 1.3 * 215).astype(np.uint8)
         _shade = Image.fromarray(np.repeat(a[:, None], W, 1), "L")
     return _shade
-CREDITS = ["FOOTAGE · LEAP 71 (@LEAP.71), AEROSPIKE HOT FIRE",
-           "SIM · 2D AXISYMMETRIC EULER, γ 1.2, SPIKE TRACED FROM THE XRA-2E5 RENDER",
+CREDITS = ["FOOTAGE · LEAP 71 (@LEAP.71), 20 kN METHALOX AEROSPIKE HOT FIRE",
+           "SIM · 2D AXISYMMETRIC EULER, GAMMA 1.2, SHAPE TRACED FROM THE 20 kN ENGINE",
            "SPECS · LEAP71.COM: XRA-2E5, 200 kN, CH4/LOX, 1 m, INCONEL 718",
-           "Pc 50 bar FROM THE 20 kN SIBLING · THRUST SCALED TO 200 kN IN VACUUM"]
+           "Pc 50 bar (20 kN ENGINE) · THRUST SCALED TO 200 kN IN VACUUM"]
 
 
 def make_frame(run, foot, n):
@@ -497,7 +496,7 @@ def main():
     run = Run(run_dir)
     print(f"L0 = {run.L0:.4f} m, time unit = {run.t_unit * 1e3:.4f} ms, total sim "
           f"{run.t[-1] * run.t_unit * 1e3:.2f} ms, engine length "
-          f"{(G.X_SPIKE_END - G.X_T) * run.L0:.2f} m spike, body dia {2 * G.R_BODY * run.L0:.2f} m, "
+          f"{(G.X_SPIKE_END - G.X_T) * run.L0:.2f} m spike, body dia {2 * G.R_MAX * run.L0:.2f} m, "
           f"sea-level thrust {run.stat(5.4, run.thrust_s) * run.kN:.0f} kN", flush=True)
     if "--preview" in sys.argv:
         ts = [float(v) for v in sys.argv[sys.argv.index("--preview") + 1].split(",")]
