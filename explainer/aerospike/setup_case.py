@@ -7,16 +7,28 @@ import numpy as np
 import geometry as G
 
 P = dict(
-    DX=0.01, XMAX=11.5, RMAX=2.8,
-    GAM=1.2,
-    PC=53.2,         # reservoir; gives ~50 bar in the chamber
-    TC=11.7,         # ~3500 K chamber / 300 K ambient
+    DX=0.012, XMAX=11.5, RMAX=4.4,
     CFL=0.4,
-    T_END=21.6,
-    T_IGN=0.05, T_RAMP=1.10,          # ignition and pressure ramp
-    T_ALT0=100.0, T_ALT1=101.0, PA_HIGH=0.03,   # no climb-out: sea level throughout
-    SNAP_DT1=0.008, SNAP_DT2=0.025, SNAP_SWITCH=2.4, NU=0.0,
-    CS=0.45,         # Smagorinsky coefficient: turbulent mixing in the shear layers
+    # gases: methalox exhaust (frozen, fuel-rich, M ~22 g/mol) and air (M 29); R is per unit of R_air
+    GAM_E=1.2, R_E=29.0 / 22.0, GAM_A=1.4,
+    TC=11.67,        # chamber temperature ~3500 K / 300 K ambient
+    # two-stage start: a weak first stage, then full pressure (the footage shows a dim
+    # flame first, then full flow); reservoir values give ~20 bar and ~50 bar in the chamber
+    T_IGN=0.05, T_RAMP=0.6, P1=21.3,
+    T_STAGE2=5.0, T_RAMP2=0.8, PC=53.2,
+    T_END=21.5,
+    T_ALT0=100.0, T_ALT1=101.0, PA_HIGH=0.03,   # sea level throughout
+    SNAP_DT1=0.008, SNAP_DT2=0.025, SNAP_SWITCH=2.4,
+    NU=0.0,
+    CS=0.45,         # Smagorinsky coefficient (chosen so the plume can close behind the tip; not validated)
+    # cooled walls (regenerative cooling keeps the hot-gas wall near 800 K)
+    ST=0.0025,       # Stanton number for the gas-side heat transfer
+    CF2=0.0025,      # half the skin-friction coefficient (Reynolds analogy)
+    TW=800.0 / 300.0,
+    # afterburning of the fuel-rich exhaust with entrained air
+    A_AB=3.0,        # rate constant (per time unit) once the mixture is hotter than T_AB
+    Q_AB=1.2e6 / (287.0 * 300.0),   # ~1.2 MJ per kg of exhaust left to burn
+    T_AB=1000.0 / 300.0,
 )
 
 def main(d, dx=None):

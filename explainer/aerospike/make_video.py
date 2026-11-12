@@ -20,7 +20,6 @@ GAM = 1.2
 P_ATM = 101325.0
 T_AMB = 300.0
 U_REF = math.sqrt(287.0 * T_AMB)        # velocity unit (p = rho T, air gas constant)
-RATED_THRUST_KN = 20.0                   # LEAP 71: 20 kN methalox aerospike (sea level)
 
 # ------------------------------------------------------------------ palette
 BG = (9, 8, 20)
@@ -96,47 +95,31 @@ def alpha_blend(fill, a, bg=BG):
 
 # ------------------------------------------------------------------ simulation data
 class Run:
+    """Snapshots (float16: rho, p, Y, u, v, Z) and the solver log of one case."""
+    NV = 6
+
     def __init__(self, d):
         self.d = d
         g = np.load(os.path.join(d, "grid.npz"))
         self.xc, self.rc, self.solid = g["xc"], g["rc"], g["solid"]
         self.dx = float(g["DX"])
+        self.gam_e, self.r_e, self.gam_a = float(g["GAM_E"]), float(g["R_E"]), float(g["GAM_A"])
         self.nx, self.nr = len(self.xc), len(self.rc)
         L = np.loadtxt(os.path.join(d, "log.txt"))
-        n = len([f for f in os.listdir(d) if f.startswith("s") and f.endswith(".f32")])
+        n = len([f for f in os.listdir(d) if f.startswith("s") and f.endswith(".f16")])
         L = L[:n]
         self.k, self.t = L[:, 0].astype(int), L[:, 1]
-        self.thrust, self.Tch, self.pch = L[:, 2], L[:, 3], L[:, 4]
-        self.mach_exit, self.mach_thr, self.pa = L[:, 5], L[:, 6], L[:, 7]
-        # smooth the wall-pressure thrust a little (start-up waves ring on the walls)
+        self.thrust, self.Tch, self.pch, self.mach_exit = L[:, 2], L[:, 3], L[:, 4], L[:, 5]
+        self.q_spike, self.pa, self.p0, self.q_chamber, self.Q_walls = L[:, 6], L[:, 7], L[:, 8], L[:, 9], L[:, 10]
         self.thrust_s = self._smooth(self.thrust, self.t, 0.12)
         self.mach_s = self._smooth(self.mach_exit, self.t, 0.12)
-        # physical scale: steady sea-level thrust == the engine's 20 kN
-        sl = self.thrust_s[(self.t > 3.0) & (self.t < 4.7)].mean()
-        self.L0 = math.sqrt(RATED_THRUST_KN * 1e3 / (sl * P_ATM))
+        self.q_s = self._smooth(np.maximum(self.q_spike, self.q_chamber), self.t, 0.12)
+        # real size from LEAP 71's photo (body ~0.29 m across); thrust is computed, not scaled
+        self.L0 = G.L0_M
         self.t_unit = self.L0 / U_REF
         self.kN = self.L0 ** 2 * P_ATM / 1e3
+        self.MWm2 = P_ATM * U_REF / 1e6
         self.cache = {}
-        self.exit_p = self._exit_pressure()
-
-    def _exit_pressure(self):
-        """Exhaust-weighted static pressure just outside the slot exit (cached)."""
-        fn = os.path.join(self.d, "exit_p.npy")
-        if os.path.exists(fn):
-            cached = np.load(fn)
-            if len(cached) == len(self.t):
-                return cached
-        i = int((G.X_LIP + 0.06) / self.dx)
-        w_r = self.rc
-        out = np.zeros(len(self.t))
-        for k in range(len(self.t)):
-            a = np.fromfile(os.path.join(self.d, f"s{k:05d}.f32"), np.float32, count=3 * self.nx * self.nr)
-            a = a.reshape(3, self.nx, self.nr)
-            p, y = a[1, i], a[2, i]
-            w = y * w_r * (~self.solid[i])
-            out[k] = (p * w).sum() / w.sum() if w.sum() > 1e-6 else 1.0
-        np.save(fn, out)
-        return out
 
     @staticmethod
     def _smooth(y, t, w):
@@ -154,26 +137,31 @@ class Run:
 
     def fields(self, k):
         if k in self.cache: return self.cache[k]
-        a = np.fromfile(os.path.join(self.d, f"s{k:05d}.f32"), np.float32).reshape(3, self.nx, self.nr)
+        a = np.fromfile(os.path.join(self.d, f"s{k:05d}.f16"), np.float16).reshape(self.NV, self.nx, self.nr)
+        a = a.astype(np.float32)
         if len(self.cache) > 6: self.cache.pop(next(iter(self.cache)))
         self.cache[k] = a
         return a
 
+    def r_mix(self, y):
+        return y * self.r_e + (1 - y)
 
-def intensity(rho, p, y, pa, dx):
-    """Grid -> display intensity (0..1) and an air-schlieren layer."""
-    T = p / rho
-    lt = np.clip(np.log(np.maximum(T, 1e-3)) / np.log(11.7), 0, 1)
+
+def intensity(rho, p, y, pa, dx, r_mix):
+    """Grid -> display intensity (0..1). Brightness follows the model: hot exhaust (and
+    afterburning mixture) glows by temperature and density; faint schlieren in the air."""
+    T = p / (rho * r_mix)
+    fT = np.clip((T - 2.2) / (11.7 - 2.2), 0, 1)
+    dens = np.clip((np.maximum(rho, 1e-5) / 0.25) ** 0.3, 0.35, 1.25)
     lr = np.log(np.maximum(rho, 1e-5))
     gx = np.zeros_like(lr); gr = np.zeros_like(lr)
     gx[1:-1] = (lr[2:] - lr[:-2]) / (2 * dx)
     gr[:, 1:-1] = (lr[:, 2:] - lr[:, :-2]) / (2 * dx)
     sch = np.clip(np.hypot(gx, gr) / 14.0, 0, 1)
-    yy = np.clip(y, 0, 1) ** 0.75
-    comp = np.clip(np.log(np.maximum(p, 1e-4) / max(pa, 1e-3)) / 3.0, -1, 1)
-    I = yy * (0.22 + 0.62 * lt ** 1.1 + 0.16 * (0.5 + 0.5 * comp))
-    I *= 1 - 0.32 * sch * yy                                 # wave structure inside the plume
-    air = (1 - yy) * sch * 0.16                              # faint waves in the air
+    w = np.clip(1.5 * y, 0, 1) ** 0.8
+    I = w * (0.12 + 0.70 * fT ** 0.9) * dens
+    I *= 1 - 0.30 * sch * w                                  # wave structure inside the plume
+    air = (1 - w) * sch * 0.16                               # faint waves in the air
     return np.clip(I + air, 0, 1).astype(np.float32)
 
 
@@ -248,13 +236,14 @@ def render_sim(run, tn, view, size, lut=None):
     w, h = size
     x0, x1, rmax = view
     k = run.idx(tn)
-    rho, p, y = run.fields(k)
+    rho, p, y = run.fields(k)[:3]
     pa = run.pa[k]
     # crop grid to the view for speed
     i0 = max(int((x0 - 0.1) / run.dx), 0); i1 = min(int((x1 + 0.1) / run.dx) + 2, run.nx)
     j1 = min(int((rmax + 0.1) / run.dx) + 2, run.nr)
     sl = (slice(i0, i1), slice(0, j1))
-    I = intensity(rho[sl].astype(np.float64), p[sl].astype(np.float64), y[sl].astype(np.float64), pa, run.dx)
+    yy = y[sl].astype(np.float64)
+    I = intensity(rho[sl].astype(np.float64), p[sl].astype(np.float64), yy, pa, run.dx, run.r_mix(yy))
     xs = x0 + (np.arange(w) + 0.5) * (x1 - x0) / w
     rs = ((h / 2) - (np.arange(h) + 0.5)) * (x1 - x0) / w
     img = sample(I, run.xc[i0], run.dx, xs, rs)
@@ -268,16 +257,18 @@ def render_sim(run, tn, view, size, lut=None):
 
 
 # ------------------------------------------------------------------ footage
-CROP_WIDE = "rotate=-30*PI/180:fillcolor=black,crop=520:308:60:320"    # wide shot, 0-1.8 s
-CROP_CLOSE = "rotate=-20*PI/180:fillcolor=black,crop=600:355:80:560"   # close-up, 1.8 s on
+# LEAP 71 hot fire at Airborne Engineering (60 fps, landscape after rotation): rotate so the
+# plume axis is horizontal, crop away the stand clutter and the app overlay in the corner
+CROP = "rotate=-23*PI/180:fillcolor=black,crop=1250:740:430:400"
+FOOT_SLOW = 2.0     # played 2x slower (the source is 60 fps, so every frame is real)
 
 
 class Footage:
-    def __init__(self, path, start, dur, size, crop=CROP_CLOSE):
+    def __init__(self, path, start, dur, size, crop=CROP, slow=FOOT_SLOW):
         self.size = size
         w, h = size
-        vf = (f"fps={FPS},{crop},"
-              f"scale={w}:{h}:flags=lanczos,eq=contrast=1.04:saturation=1.05")
+        vf = (f"setpts={slow}*PTS,fps={FPS},{crop},"
+              f"scale={w}:{h}:flags=lanczos,eq=contrast=1.03:saturation=1.03")
         cmd = ["ffmpeg", "-v", "error", "-ss", str(start), "-t", str(dur + 1), "-i", path,
                "-vf", vf, "-f", "rawvideo", "-pix_fmt", "rgb24", "-"]
         self.p = subprocess.Popen(cmd, stdout=subprocess.PIPE)
@@ -298,49 +289,61 @@ class Footage:
 # Same rhythm as the reference: one continuous take, no restart of the sim.
 T_A_END = 8.6       # part A: close-up, slow pull-back, three captions
 T_TR_END = 9.25     # header/title fade, panel moves up, footage fades in
-T_IGN = 10.0        # the jet leaves the slot in the sim == ignition in the footage
-T_CUT = 11.8        # footage cuts from the wide shot to the close-up
-T_FLASH = 12.85     # sim panel flashes when the real engine reaches full flow
+T_FLASH = 10.25     # ignition fireball in the footage; the sim panel flashes (as in the reference)
 T_B_END = 22.3      # end of part B
 T_RW_END = 23.25    # rewind + push-in back to the first frame
 TOTAL = 23.8
-FOOT_WIDE0 = 0.0    # footage time of ignition (wide shot), shown at T_IGN
-FOOT_FULL = 6.35    # footage time of full flow (close-up), shown at T_FLASH
-FOOT_CLOSE0 = FOOT_FULL - (T_FLASH - T_CUT)
+FOOT_IGN = 0.35     # footage time of the ignition fireball
+V0 = T_FLASH - FOOT_IGN * FOOT_SLOW     # video time of footage t = 0 (cold flow before ignition)
+
+
+def foot_t(t):
+    """footage time shown at video time t (frozen on the first frame before V0)"""
+    return max(0.0, (t - V0) / FOOT_SLOW)
+
+
+def fv(f):
+    """video time at which footage time f is shown"""
+    return V0 + f * FOOT_SLOW
+
+
+T_JET = fv(0.50)    # the green jet leaves the ring in the footage == the sim jet leaves the slot
 
 PANEL_A = (492, 843)
 PANEL_B = (322, 560)
-VIEW_A0 = (2.4, 8.1)
-VIEW_A1 = (0.3, 11.6)
-VIEW_B = (1.5, 10.5)
+VIEW_A0 = (0.4, 9.8)
+VIEW_A1 = (0.0, 11.3)
+VIEW_B = (0.3, 11.3)
 
-SIM_MAP = [(0.0, 0.22), (3.0, 0.42), (7.0, 0.58), (T_A_END, 0.62), (T_TR_END, 0.64),
-           # after ignition the sim jet length tracks the real flame length frame by frame
-           # (both measured as a fraction of their panel; the real flame appears on the frame at +0.10 s)
-           (T_IGN, 0.72), (T_IGN + 0.067, 0.80), (T_IGN + 0.10, 2.40), (T_IGN + 0.133, 3.00),
-           (T_IGN + 0.20, 3.30), (T_IGN + 0.40, 3.60), (T_IGN + 0.80, 4.00), (T_IGN + 0.87, 4.60),
-           # then the established jet plays at ~1.5 sim units per second so its eddies
-           # move about as fast as the real flame's
+SIM_MAP = [(0.0, 0.22), (3.0, 0.42), (7.0, 0.56), (T_A_END, 0.60), (T_TR_END, 0.64),
+           (T_FLASH, 0.70), (T_JET, 0.80),
+           # the sim jet length tracks the real flame length (both as a fraction of their panel)
+           (fv(0.60), 2.35), (fv(0.70), 3.50),
+           # the model's second stage (full pressure) lands on the real jet reaching full length
+           (fv(0.80), 5.00), (fv(0.90), 5.60), (fv(1.00), 6.00),
+           # then the established jet plays at ~1.4 model units per second
            (T_B_END, 21.40),
            (T_RW_END, 0.9), (TOTAL, 0.22)]
 
 TYPE_RATE = 46.0    # characters per second
 CAPS_A = [(0.25, "Methane and oxygen burn in a ring-shaped chamber."),
-          (3.1, "Hot gas floods the ring and pushes into the slot."),
-          (7.0, "Pressure climbs until the annular throat chokes.")]
-CAPS_B = [(10.5, "First light: the jet bursts out along the spike."),
-          (12.25, "A dim violet jet first, then the full flow, in both."),
+          (3.1, "Cryogenic methane cools the outer chamber wall."),
+          (7.0, "Liquid oxygen cools the spike from the inside.")]
+CAPS_B = [(10.5, "First light: a ring of flame forms around the spike."),
+          (12.25, "The jet grows as chamber pressure climbs, in both."),
           (13.75, "No bell: sea-level air presses the plume onto the spike."),
           (16.5, ("It pinches shut past the tip", 17.0, ", in the solve and on the stand.")),
           (20.0, None)]                       # closing line, filled in with the sim length
 CAP_FADE_B = (19.45, 19.75)
 
 SIZE_FOOT = (1080, 639)
-CREDITS = ["FOOTAGE · LEAP 71 (@LEAP.71), 20 kN METHALOX AEROSPIKE HOT FIRE",
-           "SIM · 2D AXISYMMETRIC EULER, SHAPE TRACED FROM THE ENGINE",
-           "Pc 50 bar (LEAP71.COM) · THRUST SCALED TO 20 kN AT SEA LEVEL"]
-FB_B = (6.3, 1.7)      # annotation anchors (x, r), from the solution
-WV_B = (5.4, 0.85)
+CREDITS = ["FOOTAGE · LEAP 71, 20 kN METHALOX AEROSPIKE AT AIRBORNE ENGINEERING · 2× SLOWER",
+           "COOLING AS LEAP 71 DESCRIBES IT: CH4 IN THE OUTER CHAMBER, LOX IN THE SPIKE (DRAWN)",
+           "MODEL · 2D AXISYMMETRIC, EXHAUST + AIR, AFTERBURNING, COOLED WALLS · INSIDE ASSUMED",
+           "START-UP COMPRESSED, PLAYBACK MATCHED TO THE REAL FLAME · COLOURS FROM THE FOOTAGE",
+           "SIZE FROM LEAP 71'S PHOTO · MODEL Pc ~46 bar (LEAP 71: 50) · THRUST, HEAT FLUX COMPUTED"]
+FB_B = (6.0, 1.85)     # annotation anchors (x, r), from the solution
+WV_B = (5.0, 0.95)
 PC_B = None            # set at start-up from the solution (where the plume closes)
 
 
@@ -451,11 +454,11 @@ def to_px(view, size, origin, x, r):
     return origin[0] + (x - x0) * s, origin[1] + h / 2 - r * s
 
 
-def annotate(d, view, size, origin, x, r, label, a, side="up", length=60):
+def annotate(d, view, size, origin, x, r, label, a, side="up", length=60, color=(214, 208, 236)):
     """Marker + leader line + label. side: up/down/left/right."""
     if a <= 0: return
     px, py = to_px(view, size, origin, x, r)
-    col = alpha_blend((214, 208, 236), a, PANEL)
+    col = alpha_blend(color, a, PANEL)
     d.ellipse([px - 4, py - 4, px + 4, py + 4], outline=col, width=2)
     if side in ("up", "down"):
         sgn = -1 if side == "up" else 1
@@ -487,17 +490,125 @@ LUT_A = None          # first-light colours, used before ignition and after the 
 def flame_lut(t, n, frame):
     """Sim palette that follows the colours of the real flame shown below."""
     target = LUT_A
-    if frame is not None and T_IGN + 0.09 <= t < T_B_END:
+    if frame is not None and T_FLASH - 0.03 <= t < T_B_END:
         p = palette_from_frame(frame)
         if p is not None:
             target = p
     if t >= T_B_END:
         target = LUT_A
     prev = _pal["lut"] if _pal["n"] == n - 1 else None
-    k = 0.35 if t < T_CUT + 0.3 else 0.18
+    k = 0.35 if t < fv(1.0) else 0.18
     lut = target if prev is None else prev + (target - prev) * k
     _pal["n"], _pal["lut"] = n, lut
     return lut
+
+
+def ann_win(t, a, b):
+    return smooth_step(t, a, a + 0.3) * (1 - smooth_step(t, b - 0.3, b))
+
+
+_wall = None
+
+
+def _wall_samples():
+    """Points on the hot-gas side of the spike (incl. the steep bottom) for the heat glow."""
+    global _wall
+    if _wall is None:
+        xs, rs = G.SPIKE_X, G.SPIKE_R
+        seg = np.hypot(np.diff(xs), np.diff(rs)); sarc = np.concatenate([[0], np.cumsum(seg)])
+        pts = []
+        for si in np.arange(0.0, sarc[-1], 0.03):
+            i = max(1, int(np.searchsorted(sarc, si)))
+            tx, tr = xs[i] - xs[i - 1], rs[i] - rs[i - 1]
+            L = np.hypot(tx, tr); tx, tr = tx / L, tr / L
+            pts.append((xs[i], rs[i], -tr, tx))            # wall point + outward normal
+        _wall = np.array(pts)
+    return _wall
+
+
+_chan = None
+_wallpar = None
+
+
+def draw_walls_and_cooling(d, run, tn, view, size, origin, t, a):
+    """Regenerative cooling channels inside the metal (animated coolant flow) and the
+    model's wall heat flux as a glow on the spike surface."""
+    global _chan, _wallpar
+    if _chan is None:
+        _chan = True
+        _init_paths()
+        g = np.load(os.path.join(run.d, "grid.npz"))
+        _wallpar = (float(g["ST"]), float(g["TW"]))
+    st, tw = _wallpar
+    x0, x1, rmax = view
+    sc = size[0] / (x1 - x0)
+    top, bot = origin[1], origin[1] + size[1]
+    f = run.fields(run.idx(tn))
+    rho, p, y, u, v = f[0], f[1], f[2], f[3], f[4]
+    ws = _wall_samples()
+    ii = np.clip(((ws[:, 0] + 0.025 * ws[:, 2]) / run.dx).astype(int), 0, run.nx - 1)
+    jj = np.clip(((ws[:, 1] + 0.025 * ws[:, 3]) / run.dx).astype(int), 0, run.nr - 1)
+    yy = y[ii, jj]; Rm = run.r_mix(yy)
+    cv = yy * run.r_e / (run.gam_e - 1) + (1 - yy) / (run.gam_a - 1)
+    T = p[ii, jj] / (rho[ii, jj] * Rm)
+    q = st * rho[ii, jj] * np.hypot(u[ii, jj], v[ii, jj]) * (cv + Rm) * np.maximum(T - tw, 0)
+    qn = np.clip(q / 0.9, 0, 1)
+    lw = max(3, int(0.03 * sc))
+    for sgn in (1, -1):
+        for m in range(len(ws) - 1):
+            c = float(qn[m])
+            if c < 0.04: continue
+            col = (int(90 + 165 * min(1, c * 1.6)), int(30 + 200 * c ** 1.2), int(20 + 150 * c ** 2.2))
+            col = alpha_blend(col, a * min(1, c * 2.5), PANEL)
+            pa_ = to_px(view, size, origin, ws[m][0], sgn * ws[m][1])
+            pb_ = to_px(view, size, origin, ws[m + 1][0], sgn * ws[m + 1][1])
+            if top <= pa_[1] <= bot and top <= pb_[1] <= bot:
+                d.line([pa_, pb_], fill=col, width=lw)
+    # regenerative cooling circuits: coolant pulses travel along them and warm up on the way
+    lw2 = max(4, int(0.05 * sc))
+    for kind, cold, warm in (("ch4", (255, 140, 30), (255, 232, 170)), ("lox", (40, 130, 255), (200, 235, 255))):
+        P = _paths[kind]; S_ = _paths[kind + "_s"]; Ltot = S_[-1]
+        phase = t * 0.55
+        for sgn in (1, -1):
+            pts = [to_px(view, size, origin, P[m, 0], sgn * P[m, 1]) for m in range(len(P))]
+            for m in range(len(P) - 1):
+                (xa, ya), (xb, yb) = pts[m], pts[m + 1]
+                if not (top + 2 <= ya <= bot - 2 and top + 2 <= yb <= bot - 2): continue
+                if max(xa, xb) < 0 or min(xa, xb) > size[0]: continue
+                u_ = S_[m] / Ltot
+                col = tuple(int(cold[c] + (warm[c] - cold[c]) * u_) for c in range(3))
+                pulse = ((S_[m] - phase) % 0.32) < 0.15
+                aa = a * (1.0 if pulse else 0.45)
+                d.line([(xa, ya), (xb, yb)], fill=alpha_blend(col, aa, (15, 14, 30)), width=lw2)
+            # flow arrows every ~0.9 units along the circuit
+            for s_ar in np.arange(0.45, Ltot - 0.1, 0.9):
+                m = int(np.searchsorted(S_, (s_ar + phase) % Ltot))
+                m = min(max(m, 1), len(P) - 1)
+                (xa, ya), (xb, yb) = pts[m - 1], pts[m]
+                if not (top + 8 <= yb <= bot - 8) or not (0 <= xb <= size[0]): continue
+                dx_, dy_ = xb - xa, yb - ya; Ls = math.hypot(dx_, dy_) or 1
+                ux, uy = dx_ / Ls, dy_ / Ls
+                hs = lw2 * 2.2
+                tip = (xb + ux * hs * 0.6, yb + uy * hs * 0.6)
+                l1 = (xb - ux * hs - uy * hs * 0.7, yb - uy * hs + ux * hs * 0.7)
+                l2 = (xb - ux * hs + uy * hs * 0.7, yb - uy * hs - ux * hs * 0.7)
+                u_ = S_[m] / Ltot
+                col = tuple(int(cold[c] + (warm[c] - cold[c]) * u_) for c in range(3))
+                d.polygon([tip, l1, l2], fill=alpha_blend(col, a, (15, 14, 30)))
+
+
+_paths = None
+
+
+def _init_paths():
+    global _paths
+    P = G.coolant_paths()
+    out = {}
+    for k, v in P.items():
+        seg = np.hypot(np.diff(v[:, 0]), np.diff(v[:, 1]))
+        out[k] = v
+        out[k + "_s"] = np.concatenate([[0], np.cumsum(seg)])
+    _paths = out
 
 
 def make_frame(run, foot, n):
@@ -517,20 +628,17 @@ def make_frame(run, foot, n):
     # footage (bottom), fades in from black
     fy = 1012
     fr_for_palette = None
-    if t >= T_IGN:
-        fr_for_palette = (foot[0].frame_at(max(0, int(round((t - T_IGN) * FPS)))) if t < T_CUT
-                          else foot[1].frame_at(int(round((t - T_CUT) * FPS))))
+    fidx = max(0, int(round((t - V0) * FPS)))
+    if t >= T_FLASH - 0.03:
+        fr_for_palette = foot.frame_at(fidx)
     if aF > 0:
-        if t < T_CUT:
-            fr = foot[0].frame_at(max(0, int(round((t - T_IGN) * FPS))))
-        else:
-            fr = foot[1].frame_at(int(round((t - T_CUT) * FPS)))
+        fr = foot.frame_at(fidx)
         fr = Image.blend(Image.new("RGB", SIZE_FOOT, BG), fr, aF)
         im.paste(fr, (0, fy))
         im.paste(Image.new("RGB", (W, 130), (6, 5, 14)), (0, fy), _shade_mask().point(lambda v: int(v * aF)))
 
     sim = render_sim(run, tn, view, size, flame_lut(t, n, fr_for_palette))
-    # flash when the real engine reaches full flow
+    # flash with the real ignition fireball
     fl = 0.0
     if T_FLASH - 0.08 <= t < T_FLASH + 0.6:
         fl = 0.62 * (smooth_step(t, T_FLASH - 0.08, T_FLASH) if t < T_FLASH else math.exp(-(t - T_FLASH) / 0.16))
@@ -538,6 +646,16 @@ def make_frame(run, foot, n):
         sim = Image.blend(sim, Image.new("RGB", size, (236, 232, 244)), fl)
     im.paste(sim, (0, py))
     d = ImageDraw.Draw(im)
+    draw_walls_and_cooling(d, run, tn, view, size, (0, py), t, 1.0 - 0.6 * fl)
+
+    # coolant legend inside the sim panel
+    lg_y = py + (62 if ps >= 0.5 else 22)
+    lx = 100 if ps >= 0.5 else 620
+    for i, (name, col) in enumerate((("LIQUID METHANE · OUTER CHAMBER", (255, 176, 80)),
+                                     ("LIQUID OXYGEN · SPIKE", (110, 180, 255)))):
+        yy = lg_y + i * 24
+        d.rounded_rectangle([lx, yy + 5, lx + 26, yy + 12], radius=3, fill=col)
+        spaced(d, (lx + 36, yy), name, F_ANN, (214, 208, 236), 1.5, stroke=3)
 
     right = "SIMULATION" if ps < 0.5 else "SIMULATION VS REAL"
     header(d, right, t / TOTAL, 1.0 if abs(ps - 0.5) > 0.2 else abs(ps - 0.5) / 0.2)
@@ -563,6 +681,20 @@ def make_frame(run, foot, n):
         sparkline(d, run, tn, SIM_MAP[4][1], (100, y + 105, 930, y + 140), aA)
         spaced(d, (100, y + 154), "CHAMBER TEMP", F_TINY, alpha_blend((150, 146, 166), aA), 1.4)
         spaced(d, (290, y + 154), "CHAMBER PRESSURE", F_TINY, alpha_blend((140, 126, 200), aA), 1.4)
+        if t < T_A_END + 0.3:
+            org = (0, py)
+            if _paths is None: _init_paths()
+            annotate(d, view, size, org, G.CH_X, G.CH_R + G.CH_AR + 0.02, "TOROIDAL CHAMBER",
+                     aA * ann_win(t, 0.3, 3.0), "up", 40)
+            annotate(d, view, size, org, G.E[0], -G.E[1], "ANNULAR THROAT",
+                     aA * ann_win(t, 0.3, 3.0), "right", 70)
+            ch4 = _paths["ch4"]; p_c = ch4[int(len(ch4) * 0.62)]
+            annotate(d, view, size, org, p_c[0], p_c[1], "LIQUID METHANE · OUTER WALL",
+                     aA * ann_win(t, 3.2, 6.9), "up", 34, color=(255, 196, 120))
+            lox = _paths["lox"]; ls = _paths["lox_s"]
+            p_l = lox[int(np.searchsorted(ls, ls[-1] * 0.55))]
+            annotate(d, view, size, org, p_l[0], -p_l[1], "LIQUID OXYGEN · SPIKE",
+                     aA * ann_win(t, 7.0, 8.9), "right", 90, color=(150, 205, 255))
 
     # ---------------- part B overlays
     if aB > 0:
@@ -572,8 +704,8 @@ def make_frame(run, foot, n):
         ms = tn * run.t_unit * 1e3
         spaced(d, (980, py + 24), f"T+ {ms:.2f} ms · {fmt(slower(t, run))}× SLOWER", F_LABEL,
                alpha_blend(LAV, aB), 1.6, "r", stroke=4)
-        annotate(d, view, size, org, FB_B[0], FB_B[1], "FREE BOUNDARY",
-                 aB * smooth_step(t, 14.0, 14.3), "up", 50)
+        annotate(d, view, size, org, FB_B[0], -FB_B[1], "FREE BOUNDARY",
+                 aB * smooth_step(t, 14.0, 14.3), "down", 40)
         annotate(d, view, size, org, WV_B[0], -WV_B[1], "WAVES",
                  aB * smooth_step(t, 15.0, 15.3), "left", 105)
         annotate(d, view, size, org, PC_B[0], PC_B[1], "PLUME CLOSES",
@@ -587,10 +719,10 @@ def make_frame(run, foot, n):
         x = inline_stat(d, 100, y, "THRUST", f"{thr:.1f}", "kN", aB)
         x = inline_stat(d, x + 26, y, "Pc", f"{run.stat(tn, run.pch) * 1.01325:.1f}", "bar", aB)
         x = inline_stat(d, x + 26, y, "MACH", f"{run.stat(tn, run.mach_s):.2f}", "", aB)
-        x = inline_stat(d, x + 26, y, "EXIT", f"{run.stat(tn, run.exit_p):.2f}", "atm", aB)
+        x = inline_stat(d, x + 26, y, "WALL HEAT", f"{run.stat(tn, run.q_s) * run.MWm2:.0f}", "MW/m²", aB)
     if aF > 0:
-        spaced(d, (100, fy + 22), "REAL · LEAP 71 20 kN AEROSPIKE", F_LABEL, alpha_blend((236, 232, 244), aF), 2.0, stroke=3)
-        spaced(d, (980, fy + 22), "REAL TIME", F_LABEL, alpha_blend((236, 232, 244), aF), 2.0, "r", stroke=3)
+        spaced(d, (100, fy + 22), "REAL · LEAP 71 20 kN METHALOX AEROSPIKE", F_LABEL, alpha_blend((236, 232, 244), aF), 2.0, stroke=3)
+        spaced(d, (980, fy + 22), "2× SLOWER", F_LABEL, alpha_blend((236, 232, 244), aF), 2.0, "r", stroke=3)
         cy = fy + SIZE_FOOT[1] + 18
         for i, line in enumerate(CREDITS):
             spaced(d, (980, cy + i * 21), line, F_TINY, alpha_blend((96, 93, 114), aF), 1.3, "r")
@@ -599,8 +731,8 @@ def make_frame(run, foot, n):
 
 def find_closure(run):
     """Axis point behind the spike tip where the plume closes (steady sea level)."""
-    k = run.idx(4.4)
-    rho, p, y = run.fields(k)
+    k = run.idx(12.0)
+    rho, p, y = run.fields(k)[:3]
     i0 = int((G.X_SPIKE_END + 0.2) / run.dx)
     j = 3
     yy = y[i0:, j]
@@ -619,9 +751,8 @@ def main():
     print(f"L0 = {run.L0:.4f} m, time unit = {run.t_unit * 1e3:.4f} ms, shown sim {total_ms:.2f} ms, "
           f"plume closes at x = {PC_B[0]:.2f}", flush=True)
     global LUT_A
-    LUT_A = palette_from_frame(Footage(footage, FOOT_WIDE0 + 0.4, 0.2, SIZE_FOOT, CROP_WIDE).frame_at(0))
-    foot = (Footage(footage, FOOT_WIDE0, T_CUT - T_IGN + 0.2, SIZE_FOOT, CROP_WIDE),
-            Footage(footage, FOOT_CLOSE0, TOTAL - T_CUT, SIZE_FOOT, CROP_CLOSE))
+    LUT_A = palette_from_frame(Footage(footage, 0.40, 0.1, SIZE_FOOT).frame_at(0))   # ignition glow
+    foot = Footage(footage, 0.0, 7.0, SIZE_FOOT)
     if "--preview" in sys.argv:
         ts = [float(v) for v in sys.argv[sys.argv.index("--preview") + 1].split(",")]
         for t in sorted(ts):
@@ -645,36 +776,35 @@ def main():
 
 
 def make_audio(run, footage, path):
-    """Rumble that follows the simulated chamber pressure, then the hot fire's own sound."""
+    """The new footage has no sound, so the track is synthetic: a hiss of cold flow before
+    ignition, a crack at the fireball, then a roar that follows the model's chamber
+    pressure and thrust."""
     sr = 48000
     n = int(TOTAL * sr)
     rng = np.random.default_rng(7)
-    br = np.cumsum(rng.standard_normal(n)); br -= np.convolve(br, np.ones(4801) / 4801, mode="same")
-    br /= np.abs(br).max() + 1e-9
     tt = np.arange(n) / sr
     tn = np.interp(tt, [p[0] for p in SIM_MAP], [p[1] for p in SIM_MAP])
-    env = np.clip(np.interp(tn, run.t, run.pch) / 50.0, 0, 1) ** 0.8
-    gate = 1 - np.clip((tt - T_IGN) / 0.3, 0, 1) + np.clip((tt - T_B_END) / 0.6, 0, 1)
-    rumble = br * env * np.clip(gate, 0, 1) * 0.35
 
-    def clip(start, dur):
-        raw = subprocess.run(["ffmpeg", "-v", "error", "-ss", str(start), "-t", str(dur), "-i", footage,
-                              "-ac", "2", "-ar", str(sr), "-f", "f32le", "-"], capture_output=True).stdout
-        return np.frombuffer(raw, np.float32).reshape(-1, 2).copy()
+    def brown(seed, win):
+        r = np.random.default_rng(seed)
+        b = np.cumsum(r.standard_normal(n)); b -= np.convolve(b, np.ones(win) / win, mode="same")
+        return b / (np.abs(b).max() + 1e-9)
 
-    mix = np.zeros((n, 2), np.float32)
-    mix[:, 0] += rumble; mix[:, 1] += rumble
-    xf = int(0.03 * sr)
-    wide = clip(FOOT_WIDE0, T_CUT - T_IGN + 0.03)
-    close = clip(FOOT_CLOSE0 - 0.03, TOTAL - T_CUT + 0.03)
-    i0 = int(T_IGN * sr); m = min(len(wide), n - i0)
-    fade_out = np.ones(m); fade_out[-xf:] = np.linspace(1, 0, xf)
-    mix[i0:i0 + m] += wide[:m] * fade_out[:, None]
-    i1 = int(T_CUT * sr) - xf; m = min(len(close), n - i1)
-    tl = np.arange(m) / sr + i1 / sr
-    g = np.clip((tl - (T_CUT - 0.03)) / 0.03, 0, 1) * (1 - np.clip((tl - T_B_END) / 0.6, 0, 1))
-    mix[i1:i1 + m] += close[:m] * g[:, None]
-    mix = np.clip(mix, -1, 1)
+    low = brown(7, 4801)
+    mid = brown(8, 601)
+    hiss = rng.standard_normal(n); hiss -= np.convolve(hiss, np.ones(9) / 9, mode="same"); hiss /= np.abs(hiss).max()
+    pc = np.clip(np.interp(tn, run.t, run.pch) / 46.0, 0, 1)
+    thr = np.clip(np.interp(tn, run.t, run.thrust_s) / 150.0, 0, 1)
+    part_a = np.clip((T_A_END + 0.6 - tt) / 0.6, 0, 1)
+    rewind = np.clip((tt - T_B_END) / 0.4, 0, 1)
+    roar = 2.8 * (0.30 * low + 0.18 * mid) * (0.35 * pc * part_a + 0.9 * thr * (1 - part_a)) * (1 - 0.8 * rewind)
+    cold = 0.14 * hiss * np.clip((tt - 9.0) / 0.4, 0, 1) * np.clip((T_FLASH - tt) / 0.1, 0, 1)
+    crack = np.zeros(n)
+    i0 = int(T_FLASH * sr)
+    k = np.arange(int(0.6 * sr))
+    crack[i0:i0 + len(k)] = 2.2 * mid[i0:i0 + len(k)] * np.exp(-k / (0.12 * sr))
+    mono = np.clip(roar + cold + crack, -1, 1).astype(np.float32)
+    mix = np.stack([mono, np.roll(mono, 37)], 1)
     subprocess.run(["ffmpeg", "-v", "error", "-y", "-f", "f32le", "-ar", str(sr), "-ac", "2", "-i", "-", path],
                    input=mix.astype(np.float32).tobytes(), check=True)
 
