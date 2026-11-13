@@ -358,7 +358,8 @@ CAM_B = (0.5 * (VIEW_B[0] + VIEW_B[1]), 0.0, VIEW_B[1] - VIEW_B[0])
 # is compressed); a weak first stage; full pressure (T_STAGE2 = 20.4) with the full column.
 SIM_MAP = [(0.0, 0.10), (T_A_END, 5.20), (T_TR_END, 5.60), (V0, 6.40), (T_FLASH - 0.04, 7.96),
            # ignition with the fireball; the jet crosses the panel while the fireball fills the frame
-           (T_FLASH, 8.02), (fv(0.38), 8.40), (fv(0.44), 10.90), (fv(0.50), 15.40), (fv(0.56), 18.80),
+           # (jet front: lip at 8.3, x = 5 at 10.6, x = 9.6 at 15, panel edge x = 13.5 at 19.7)
+           (T_FLASH, 8.02), (fv(0.38), 8.60), (fv(0.42), 10.50), (fv(0.46), 14.00), (fv(0.50), 19.70),
            # weak first stage while the real flame is thin green streaks
            (fv(0.78), 20.30),
            # full pressure when the real flame becomes one full column
