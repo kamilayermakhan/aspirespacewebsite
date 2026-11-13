@@ -155,14 +155,14 @@ def intensity(rho, p, y, pa, dx, r_mix):
     """Grid -> display intensity (0..1). Brightness follows the model: hot exhaust (and
     afterburning mixture) glows by temperature and density; faint schlieren in the air."""
     T = p / (rho * r_mix)
-    fT = np.clip((T - 2.2) / (11.7 - 2.2), 0, 1)
+    fT = np.clip((T - 1.8) / (8.5 - 1.8), 0, 1)      # the expanded jet core (~2,000 K) glows too
     dens = np.clip((np.maximum(rho, 1e-5) / 0.25) ** 0.3, 0.35, 1.25)
     lr = np.log(np.maximum(rho, 1e-5))
     gx = np.zeros_like(lr); gr = np.zeros_like(lr)
     gx[1:-1] = (lr[2:] - lr[:-2]) / (2 * dx)
     gr[:, 1:-1] = (lr[:, 2:] - lr[:, :-2]) / (2 * dx)
     sch = np.clip(np.hypot(gx, gr) / 14.0, 0, 1)
-    w = np.clip(1.5 * y, 0, 1) ** 0.8
+    w = np.clip(y, 0, 1) ** 1.4                       # exhaust diluted in air glows less
     I = w * (0.12 + 0.70 * fT ** 0.9) * dens
     I *= 1 - 0.30 * sch * w                                  # wave structure inside the plume
     air = (1 - w) * sch * 0.16                               # faint waves in the air
@@ -673,7 +673,7 @@ def make_frame(run, foot, n):
             aE, bE = net.band["ch4"]
             mE = 0.5 * (aE[len(aE) * 2 // 3] + bE[len(bE) * 2 // 3])
             annotate(d, view, size, org, mE[0], mE[1], "CH4 CHANNELS · OUTER SHELL",
-                     aA * ann_win(t, 3.1, 5.6), "up", 70, color=CL.COOL["ch4"][1])
+                     aA * ann_win(t, 3.1, 5.0), "up", 70, color=CL.COOL["ch4"][1])
             annotate(d, view, size, org, net.m_ch4_in[0], net.m_ch4_in[1], "CH4 IN AT THE LIP",
                      aA * ann_win(t, 3.6, 6.4), "right", 70, color=CL.COOL["ch4"][1])
             aL, bL = net.band["lox"]
