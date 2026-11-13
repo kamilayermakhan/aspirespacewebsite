@@ -341,9 +341,9 @@ HOTGAS = (255, 186, 120)
 STEEL = (56, 58, 68)
 CU = (175, 98, 60)
 
-# cold metal stays a dim slate (the bright blue is kept for the oxygen), hot metal glows
-_TMAP = [(80, (78, 92, 122)), (150, (70, 78, 100)), (260, (62, 64, 76)), (420, (104, 48, 40)),
-         (600, (196, 84, 36)), (780, (246, 168, 70)), (950, (255, 236, 190))]
+# CuCrZr: copper colour when cold (frosted darker at cryogenic temperature), glowing when hot
+_TMAP = [(80, (122, 80, 66)), (150, (146, 90, 64)), (300, (178, 106, 66)), (450, (198, 104, 52)),
+         (600, (226, 120, 50)), (780, (248, 172, 80)), (950, (255, 236, 190))]
 
 
 def metal_rgb(T):

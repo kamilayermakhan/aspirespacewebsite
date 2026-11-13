@@ -7,21 +7,24 @@ import numpy as np
 import geometry as G
 
 P = dict(
-    DX=0.015, XMIN=-3.0, XMAX=14.5, RMAX=9.0,
+    DX=0.02, XMIN=G.X_CROWN - 1.0, XMAX=14.0, RMAX=9.0,
     # far field: room around the engine so the jet can entrain air freely (a boundary close
     # to the engine confines the jet and traps its exhaust in a recirculating cloud)
-    RSNAP=5.2,       # snapshots keep r < RSNAP only (what the video shows)
+    RSNAP=5.0,       # snapshots keep r < RSNAP only (what the video shows)
     CFL=0.4,
     # gases: methalox exhaust (frozen, fuel-rich, M ~22 g/mol) and air (M 29); R is per unit of R_air
     GAM_E=1.2, R_E=29.0 / 22.0, GAM_A=1.4,
     TC=11.67,        # chamber temperature ~3500 K / 300 K ambient
     # two-stage start: a weak first stage, then full pressure (the footage shows a dim
     # flame first, then full flow); reservoir values give ~20 bar and ~50 bar in the chamber
-    T_IGN=0.05, T_RAMP=0.6, P1=21.3,
-    T_STAGE2=5.0, T_RAMP2=0.8, PC=53.2,
-    T_END=21.5,
+    # cold flow first (as in the footage): propellant gas at ~3 bar purges the engine; then
+    # the gas in the chamber ignites (the fireball), a weak first stage, then full pressure
+    P_COLD=3.0, T_COLD=0.5,
+    T_IGN=8.0, T_RAMP=0.4, P1=26.6,
+    T_STAGE2=20.4, T_RAMP2=0.5, PC=53.2,
+    T_END=27.4,
     T_ALT0=100.0, T_ALT1=101.0, PA_HIGH=0.03,   # sea level throughout
-    SNAP_DT1=0.008, SNAP_DT2=0.025, SNAP_SWITCH=2.4,
+    SNAP_DT1=0.02, SNAP_DT2=0.02, SNAP_SWITCH=1.0,
     NU=0.0,
     CS=0.45,         # Smagorinsky coefficient (chosen so the plume can close behind the tip; not validated)
     # cooled walls (regenerative cooling keeps the hot-gas wall near 800 K)
@@ -46,7 +49,8 @@ def main(d, dx=None):
     probe = G.chamber_probe(X, R) & ~s
     sx = s.copy(); sx[1:] |= s[:-1]; sx[:-1] |= s[1:]
     sr = s.copy(); sr[:, 1:] |= s[:, :-1]; sr[:, :-1] |= s[:, 1:]
-    fl = (s * 1 + res * 2 + probe * 4 + sx * 8 + sr * 16).astype(np.uint8)
+    cav = G.in_cavity(X, R) & ~s
+    fl = (s * 1 + res * 2 + probe * 4 + sx * 8 + sr * 16 + cav * 32).astype(np.uint8)
     fl.tofile(os.path.join(d, "flags.u8"))
     nrs = min(nr, int(round(P["RSNAP"] / P["DX"])))
     with open(os.path.join(d, "params.txt"), "w") as f:

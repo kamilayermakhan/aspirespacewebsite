@@ -24,6 +24,8 @@ static double DX, CFL, T_END, T_IGN, T_RAMP, P1 = 0, T_STAGE2 = 1e9, T_RAMP2 = 1
 static double T_ALT0 = 1e9, T_ALT1 = 2e9, PA_HIGH = 1, XSPIKE, XLIP, SNAP_DT1, SNAP_DT2, SNAP_SWITCH;
 static double NU = 0, CS = 0, GAM_E = 1.2, R_E = 1.318, GAM_A = 1.4;
 static double ST = 0, CF2 = 0, TW = 2.67, A_AB = 0, Q_AB = 0, T_AB = 3.3;
+/* cold flow before ignition: propellant gas (cold, unburned) through the engine at P_COLD */
+static double P_COLD = 0, T_COLD = 0.5;
 static unsigned char *FL;  /* bit0 solid, bit1 reservoir, bit2 probe, bit3 flat_x, bit4 flat_r */
 static unsigned char *NWALL;
 static double *rc, *rf, *NUT;
@@ -41,6 +43,13 @@ static inline void gas(double y, double *gam, double *R, double *cv) {
 static double smooth(double s) { if (s < 0) s = 0; if (s > 1) s = 1; return s * s * (3 - 2 * s); }
 static void chamber_target(double t, double *p0, double *T0) {
     double pst1 = P1 > 0 ? P1 : PC;
+    if (P_COLD > 0) {
+        /* cold flow first, then ignition at T_IGN and the two pressure stages */
+        if (t < T_IGN) { *p0 = P_COLD; *T0 = T_COLD; return; }
+        *p0 = P_COLD + (pst1 - P_COLD) * smooth((t - T_IGN) / T_RAMP) + (PC - pst1) * smooth((t - T_STAGE2) / T_RAMP2);
+        *T0 = TC;
+        return;
+    }
     *p0 = 1 + (pst1 - 1) * smooth((t - T_IGN) / T_RAMP) + (PC - pst1) * smooth((t - T_STAGE2) / T_RAMP2);
     *T0 = 1 + (TC - 1) * smooth((t - T_IGN) / 0.25);
 }
@@ -117,6 +126,21 @@ static void force_reservoir(double **U, double t) {
     double r = p0 / (R_E * T0);
     for (size_t c = 0; c < (size_t)NX * NR; c++) if (FL[c] & 2) {
         U[0][c] = r; U[1][c] = 0; U[2][c] = 0; U[3][c] = p0 / (GAM_E - 1); U[4][c] = r; U[5][c] = r;
+    }
+}
+/* ignition: the propellant gas in the chamber and passage (flag 32) burns, at constant pressure */
+static void ignite(double **U) {
+    #pragma omp parallel for
+    for (size_t c = 0; c < (size_t)NX * NR; c++) if ((FL[c] & 32) && !(FL[c] & 1)) {
+        double r = U[0][c], u = U[1][c] / r, v = U[2][c] / r, y = U[4][c] / r, z = U[5][c] / r;
+        if (z < 0.5) continue;
+        double g, R, cv; gas(y, &g, &R, &cv);
+        double p = (g - 1) * (U[3][c] - 0.5 * r * (u * u + v * v));
+        double T = p / (r * R);
+        if (T >= TC) continue;
+        double rn = r * T / TC;
+        U[0][c] = rn; U[1][c] = rn * u; U[2][c] = rn * v; U[3][c] = p / (g - 1) + 0.5 * rn * (u * u + v * v);
+        U[4][c] = rn * y; U[5][c] = rn * z;
     }
 }
 static inline void getW(int i, int j, double pa, double *w) {
@@ -292,6 +316,7 @@ static void read_params(const char *dir) {
         P("SNAP_DT1", SNAP_DT1) P("SNAP_DT2", SNAP_DT2) P("SNAP_SWITCH", SNAP_SWITCH)
         P("NU", NU) P("CS", CS) P("GAM_E", GAM_E) P("R_E", R_E) P("GAM_A", GAM_A)
         P("ST", ST) P("CF2", CF2) P("TW", TW) P("A_AB", A_AB) P("Q_AB", Q_AB) P("T_AB", T_AB)
+        P("P_COLD", P_COLD) P("T_COLD", T_COLD)
         P("GAM", dummy)
     }
     NX = NXd; NR = NRd; NRS = (NRSd > 0 && NRSd < NR) ? NRSd : NR;
@@ -326,7 +351,14 @@ int main(int argc, char **argv) {
         W[k] = calloc(N, 8); SX[k] = calloc(N, 8); SRr[k] = calloc(N, 8);
         FX[k] = calloc((size_t)(NX + 1) * NR, 8); FR[k] = calloc((size_t)NX * (NR + 1), 8);
     }
-    for (size_t c = 0; c < N; c++) { U[0][c] = 1; U[3][c] = 1 / (GAM_A - 1); }
+    for (size_t c = 0; c < N; c++) {
+        if (P_COLD > 0 && (FL[c] & 32)) {          /* cold propellant gas in the chamber and passage */
+            /* the cold flow is already running when the clip starts: gas at P_COLD */
+            double r = P_COLD / (R_E * T_COLD);
+            U[0][c] = r; U[3][c] = P_COLD / (GAM_E - 1); U[4][c] = r; U[5][c] = r;
+        } else { U[0][c] = 1; U[3][c] = 1 / (GAM_A - 1); }
+    }
+    int ignited = !(P_COLD > 0);
     snprintf(fn, sizeof fn, "%s/log.txt", dir);
     FILE *lg = fopen(fn, "w");
     _Float16 *buf = malloc(N * sizeof(_Float16));
@@ -349,6 +381,7 @@ int main(int argc, char **argv) {
             k++;
             next += (t < SNAP_SWITCH) ? SNAP_DT1 : SNAP_DT2;
         }
+        if (!ignited && t >= T_IGN) { ignite(U); ignited = 1; printf("ignition at t=%.4f\n", t); fflush(stdout); }
         force_reservoir(U, t);
         double dt = rhs(U, t, K, 1);
         if (next - t < dt && next > t) dt = next - t + 1e-12;
