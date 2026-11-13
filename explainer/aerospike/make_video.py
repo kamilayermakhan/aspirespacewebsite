@@ -106,6 +106,7 @@ class Run:
         self.dx = float(g["DX"])
         self.xmin = float(g["XMIN"]) if "XMIN" in g.files else 0.0
         self.st, self.tw = float(g["ST"]), float(g["TW"])
+        self.u_ref = U_REF
         self.gam_e, self.r_e, self.gam_a = float(g["GAM_E"]), float(g["R_E"]), float(g["GAM_A"])
         self.nx, self.nr = len(self.xc), len(self.rc)
         L = np.loadtxt(os.path.join(d, "log.txt"))
@@ -235,7 +236,7 @@ def palette_from_frame(img):
     return np.stack([np.interp(grid, xs, ys[:, c]) for c in range(3)], 1).astype(np.float32)
 
 
-def render_sim(run, tn, view, size, lut=None):
+def render_sim(run, tn, view, size, lut=None, thermal=None):
     w, h = size
     x0, x1, rmax, rc = view
     k = run.idx(tn)
@@ -256,6 +257,16 @@ def render_sim(run, tn, view, size, lut=None):
     im = Image.blend(im, Image.fromarray(np.maximum(np.asarray(im), np.asarray(glow)), "RGB"), 0.55)
     lay = engine_layer(view, size)
     im.paste(lay, (0, 0), lay)
+    alpha = np.asarray(lay)[..., 3].astype(np.float32) / 255.0
+    arr = np.asarray(im).astype(np.float32)
+    if thermal is not None:
+        # metal temperature from the conduction solution (copper and steel tinted apart)
+        Tf, cu = thermal
+        Ts = sample(np.nan_to_num(Tf[sl], nan=300.0).astype(np.float32), run.xc[i0], run.dx, xs, rs)
+        Cs = sample(cu[sl].astype(np.float32), run.xc[i0], run.dx, xs, rs)
+        mrgb = CL.metal_rgb(Ts)
+        mrgb = mrgb * (1 - 0.30 * Cs[..., None]) + np.array(CL.CU, np.float32) * 0.30 * Cs[..., None]
+        arr = arr * (1 - alpha[..., None]) + mrgb * alpha[..., None]
     # printed-metal grain, in world coordinates
     sc_ = w / (x1 - x0)
     if sc_ > 60:
@@ -264,11 +275,8 @@ def render_sim(run, tn, view, size, lut=None):
         hsh = (ix * 73856093) ^ (ir * 19349663)
         hsh = (hsh ^ (hsh >> 13)) * 1274126177
         nz = ((hsh >> 7) & 255).astype(np.float32) / 255.0 - 0.5
-        alpha = np.asarray(lay)[..., 3].astype(np.float32) / 255.0
-        arr = np.asarray(im).astype(np.float32)
-        arr += (nz * 16.0 * alpha)[..., None]
-        im = Image.fromarray(np.clip(arr, 0, 255).astype(np.uint8), "RGB")
-    return im
+        arr += (nz * 14.0 * alpha)[..., None]
+    return Image.fromarray(np.clip(arr, 0, 255).astype(np.uint8), "RGB")
 
 
 # ------------------------------------------------------------------ footage
@@ -330,46 +338,49 @@ T_JET = fv(0.517)   # first green streaks leave the ring in the footage == the s
 PANEL_A = (492, 843)
 PANEL_B = (322, 560)
 # camera keyframes: (centre x, centre r, width) in L0
-CAM_CHAMBER = (2.95, 2.80, 2.7)      # chamber, injector, manifolds, cowl channels
-CAM_SPIKE = (4.30, 1.25, 4.6)        # down the spike to its tip and the LOX feed
-CAM_A1 = (5.65, 0.0, 11.3)           # whole engine
-CAM_B = (5.80, 0.0, 11.0)
-VIEW_B = (0.3, 11.3)
+CAM_CHAMBER = (0.80, 2.85, 3.5)      # ring chamber, injector face, outer shell, passage start
+CAM_SPIKE = (4.70, 1.05, 6.6)        # passage, lip, central body to its tip, LOX along the axis
+CAM_A1 = (5.40, 0.0, 15.4)           # whole engine
+CAM_B = (5.90, 0.0, 16.0)
+VIEW_B = (-2.1, 13.9)
 
 # Flame course in the footage (source time): cold propellant flow 0-0.33 s; ignition
 # fireball 0.35-0.50 s; first thin green streaks from the ring, converging along the spike,
 # at 0.517 s; a growing, flickering green jet with an afterburning cloud beyond it to
 # 0.78 s; one bright full column from 0.80 s.
 SIM_MAP = [(0.0, 0.22), (3.0, 0.42), (7.0, 0.56), (T_A_END, 0.60), (T_TR_END, 0.64),
-           (T_FLASH, 0.70), (fv(0.50), 0.80),
-           # weak first stage: the jet leaves the slot and grows along the spike
-           (T_JET, 2.40), (fv(0.55), 3.00), (fv(0.65), 4.00), (fv(0.78), 4.95),
-           # second stage: full chamber pressure when the real flame becomes one full column
-           (fv(0.80), 5.40), (fv(0.85), 6.00),
-           # then the established jet plays at ~1.4 model units per second
+           # fireball: the ring chamber fills and its hot gas reaches the lip
+           (T_FLASH, 0.70), (fv(0.45), 2.00),
+           # weak first stage: the annular jet leaves the lip and wraps the central body
+           (T_JET, 3.35), (fv(0.55), 3.75), (fv(0.65), 4.30), (fv(0.78), 5.00),
+           # second stage when the real flame becomes one full column; then, as in the
+           # scheme (0.73-1.23 s), the annular flow converges into the axial jet: the air left
+           # behind the tip from the start is entrained and the jet closes on the axis
+           (fv(0.80), 5.40), (fv(1.00), 8.80), (fv(1.23), 13.00), (fv(1.40), 14.20),
+           # then the established jet plays at ~0.7 model units per second
            (T_B_END, 21.40),
            (T_RW_END, 0.9), (TOTAL, 0.22)]
 
 TYPE_RATE = 46.0    # characters per second
 CAPS_A = [(0.25, "Methane and oxygen burn in a ring-shaped chamber."),
-          (3.1, "Liquid methane runs up the outer wall, then into the injector."),
-          (7.0, "Liquid oxygen cools the spike: down its core, up its skin.")]
-CAPS_B = [(10.5, "First light: a ring of flame forms around the spike."),
-          (12.25, "At full pressure the jet fills out into one column, in both."),
-          (13.75, "No bell: sea-level air presses the plume onto the spike."),
-          (16.5, ("It pinches shut past the tip", 17.0, ", in the solve and on the stand.")),
+          (3.1, "Methane runs from the lip back through the outer shell."),
+          (7.0, "Oxygen runs down the central body to its tip, then back.")]
+# phases of the test flame, as in the explanation (footage time)
+CAPS_B = [(fv(0.23), "Gas release first: the flame has not formed yet."),
+          (fv(0.73), "The annular flow wraps the central body: an axial jet forms."),
+          (fv(1.73), "Developed flame. Green glow: copper burning, per LEAP 71."),
+          (16.5, ("Channels inside the walls", 17.0, ", hot gas outside them.")),
           (20.0, None)]                       # closing line, filled in with the sim length
 CAP_FADE_B = (19.45, 19.75)
 
 SIZE_FOOT = (1080, 639)
 CREDITS = ["FOOTAGE · LEAP 71, 20 kN METHALOX AEROSPIKE AT AIRBORNE ENGINEERING · 2× SLOWER",
-           "COOLING AS LEAP 71 DESCRIBES IT: CH4 IN THE OUTER CHAMBER, LOX IN THE SPIKE · CHANNEL LAYOUT ASSUMED",
-           "COOLANT AND WALL TEMPERATURES: 1D ENERGY BALANCE ON THE MODEL'S WALL HEAT FLUX",
-           "MODEL · 2D AXISYMMETRIC, EXHAUST + AIR, AFTERBURNING, COOLED WALLS · INSIDE ASSUMED",
+           "RING CHAMBER, ANNULAR FLOW AROUND THE CENTRAL BODY · CH4 COOLS THE OUTER SHELL, LOX THE CENTRAL BODY",
+           "MODEL · 2D AXISYMMETRIC FLOW · COOLANT: 1D BALANCE · METAL: STEADY CONDUCTION · ROUTING NOTIONAL",
            "START-UP COMPRESSED, PLAYBACK MATCHED TO THE REAL FLAME · COLOURS FROM THE FOOTAGE",
            "SIZE FROM LEAP 71'S PHOTO · MODEL Pc ~46 bar (LEAP 71: 50) · THRUST, HEAT FLUX COMPUTED"]
-FB_B = (6.0, 1.85)     # annotation anchors (x, r), from the solution
-WV_B = (5.0, 0.95)
+FB_B = (7.5, 2.02)     # annotation anchors (x, r), from the solution (time-averaged t = 12-20)
+WV_B = (5.0, float(G.r_spike(5.0)))
 PC_B = None            # set at start-up from the solution (where the plume closes)
 
 
@@ -535,13 +546,33 @@ def ann_win(t, a, b):
     return smooth_step(t, a, a + 0.3) * (1 - smooth_step(t, b - 0.3, b))
 
 
-def draw_walls_and_cooling(d, run, tn, view, size, origin, t, a):
-    """Regenerative cooling network (cooling.py): coolant and wall temperatures from a 1D
-    energy balance on the model's wall heat flux, drawn inside the metal."""
+THERMAL = None
+
+
+def cooling_state(run, tn):
+    """1D coolant balance for this frame and the metal temperature field, blended between the
+    chilled-down and full-pressure conduction solutions by the current heat load."""
     f = run.fields(run.idx(tn))
-    S = CL.solve(run, f, run.stat(tn, run.pch) * 1.01325)
-    CL.draw(d, run, S, view, size, origin, t, a, to_px)
-    return S
+    S = CL.solve(run, f)
+    th = THERMAL
+    s_ = float(np.clip(S.Q / max(th["Q_hot"], 1.0), 0.0, 1.2))
+    T = th["T_cold"] + s_ * (th["T_hot"] - th["T_cold"])
+    hot_cu = th["copper"] & np.isfinite(T)
+    S.metal_peak = float(np.nanmax(np.where(hot_cu, T, np.nan)))
+    return S, (T, th["copper"])
+
+
+def colour_bar(d, x, y, w, a):
+    """Metal temperature scale."""
+    for i in range(w):
+        T = 80 + (950 - 80) * i / (w - 1)
+        c = CL.metal_rgb(np.array([T]))[0]
+        d.line([(x + i, y), (x + i, y + 7)], fill=alpha_blend(tuple(int(v) for v in c), a))
+    for T in (100, 300, 500, 700, 900):
+        xx = x + (T - 80) / (950 - 80) * (w - 1)
+        d.line([(xx, y + 8), (xx, y + 12)], fill=alpha_blend((200, 196, 214), a))
+        spaced(d, (xx, y + 13), f"{T}", F_TINY, alpha_blend((200, 196, 214), a), 1.0, "m", stroke=2)
+    spaced(d, (x, y - 19), "METAL TEMPERATURE · K", F_TINY, alpha_blend((214, 208, 236), a), 1.4, stroke=2)
 
 
 def make_frame(run, foot, n):
@@ -571,8 +602,9 @@ def make_frame(run, foot, n):
         im.paste(fr, (0, fy))
         im.paste(Image.new("RGB", (W, 130), (6, 5, 14)), (0, fy), _shade_mask().point(lambda v: int(v * aF)))
 
-    sim = render_sim(run, tn, view, size, flame_lut(t, n, fr_for_palette))
-    CS = draw_walls_and_cooling(ImageDraw.Draw(sim), run, tn, view, size, (0, 0), t, 1.0)
+    CS, thermal = cooling_state(run, tn)
+    sim = render_sim(run, tn, view, size, flame_lut(t, n, fr_for_palette), thermal)
+    CL.draw(ImageDraw.Draw(sim), CS, view, size, (0, 0), t, 1.0, to_px)
     # flash with the real ignition fireball
     fl = 0.0
     if T_FLASH - 0.08 <= t < T_FLASH + 0.6:
@@ -584,15 +616,21 @@ def make_frame(run, foot, n):
 
     # coolant legend inside the sim panel (part B), with the computed temperatures
     if ps >= 0.5:
-        lg_y, lx = py + 62, 100
-        rows = (("LIQUID METHANE · OUTER CHAMBER", (255, 176, 80), f"OUT {CS.out['ch4']:.0f} K"),
-                ("LIQUID OXYGEN · SPIKE", (110, 180, 255), f"OUT {CS.out['lox']:.0f} K"),
-                ("CuCrZr WALL PEAK", CL.copper_glow(CS.peak_wall), f"{CS.peak_wall:.0f} K"))
+        # in the empty band above the panel, so it never covers the engine
+        lg_y, lx = 104, 100
+        rows = (("OXYGEN · CENTRAL BODY", CL.COOL["lox"][0], f"OUT {CS.out['lox']:.0f} K"),
+                ("METHANE · OUTER SHELL", CL.COOL["ch4"][0], f"OUT {CS.out['ch4']:.0f} K"),
+                ("HOT GAS · ANNULAR FLOW", CL.HOTGAS, f"{run.stat(tn, run.Tch) * T_AMB:,.0f} K"),
+                ("CuCrZr WALL PEAK", CL.copper_glow(CS.metal_peak), f"{CS.metal_peak:.0f} K"))
+        aL_ = aB
         for i, (name, col, val) in enumerate(rows):
-            yy = lg_y + i * 24
-            d.rounded_rectangle([lx, yy + 5, lx + 26, yy + 12], radius=3, fill=col)
-            wn = spaced(d, (lx + 36, yy), name, F_ANN, (214, 208, 236), 1.5, stroke=3)
-            spaced(d, (lx + 36 + wn + 12, yy), val, F_ANN, (255, 255, 255), 1.5, stroke=3)
+            yy = lg_y + i * 26
+            d.rounded_rectangle([lx, yy + 5, lx + 26, yy + 12], radius=3, fill=alpha_blend(col, aL_))
+            wn = spaced(d, (lx + 36, yy), name, F_ANN, alpha_blend((214, 208, 236), aL_), 1.5)
+            spaced(d, (lx + 36 + wn + 12, yy), val, F_ANN, alpha_blend((255, 255, 255), aL_), 1.5)
+        colour_bar(d, 680, lg_y + 22, 300, aL_)
+    else:
+        colour_bar(d, 660, py + 40, 300, aA)
 
     right = "SIMULATION" if ps < 0.5 else "SIMULATION VS REAL"
     header(d, right, t / TOTAL, 1.0 if abs(ps - 0.5) > 0.2 else abs(ps - 0.5) / 0.2)
@@ -615,8 +653,8 @@ def make_frame(run, foot, n):
         stat_block(d, 270, y, "Pc", f"{run.stat(tn, run.pch) * 1.01325:.1f}", "bar", aA)
         stat_block(d, 450, y, "CH4 OUT", f"{CS.out['ch4']:.0f}", "K", aA)
         stat_block(d, 625, y, "LOX OUT", f"{CS.out['lox']:.0f}", "K", aA)
-        stat_block(d, 800, y, "Cu WALL", f"{CS.peak_wall:.0f}", "K", aA)
-        for xx, col in ((450, (255, 176, 80)), (625, (110, 180, 255)), (800, CL.copper_glow(CS.peak_wall))):
+        stat_block(d, 800, y, "Cu WALL", f"{CS.metal_peak:.0f}", "K", aA)
+        for xx, col in ((450, CL.COOL["ch4"][0]), (625, CL.COOL["lox"][0]), (800, CL.copper_glow(CS.metal_peak))):
             d.rounded_rectangle([xx, y - 12, xx + 26, y - 6], radius=3, fill=alpha_blend(col, aA))
         sparkline(d, run, tn, SIM_MAP[4][1], (100, y + 105, 930, y + 140), aA)
         spaced(d, (100, y + 154), "CHAMBER TEMP", F_TINY, alpha_blend((150, 146, 166), aA), 1.4)
@@ -624,26 +662,28 @@ def make_frame(run, foot, n):
         if t < T_A_END + 0.3:
             org = (0, py)
             net = CL.network()
-            annotate(d, view, size, org, G.CH_X + 0.10, G.CH_R + G.CH_AR, "TOROIDAL CHAMBER",
-                     aA * ann_win(t, 0.3, 3.0), "up", 30)
-            fx = G.CH_X - G.CH_AX
-            annotate(d, view, size, org, fx + 0.01, G.CH_R - 0.02, "INJECTOR FACE",
-                     aA * ann_win(t, 0.3, 3.0), "left", 120)
-            annotate(d, view, size, org, G.E[0], G.E[1], "ANNULAR THROAT",
-                     aA * ann_win(t, 0.3, 3.0), "right", 60)
-            mo = net.m_ch4_out
-            annotate(d, view, size, org, mo[0] + mo[2], mo[1] + mo[2] * 0.5, "CH4 MANIFOLD",
-                     aA * ann_win(t, 3.1, 4.9), "up", 26, color=(255, 196, 120))
-            ch = net.channels["ch4"][6]["c"]
-            annotate(d, view, size, org, ch[0], ch[1], "CH4 CHANNELS IN THE COWL",
-                     aA * ann_win(t, 3.1, 4.9), "down", 150, color=(255, 196, 120))
-            annotate(d, view, size, org, (G.CH_X - G.CH_AX) + 0.02, G.CH_R + 0.12, "Cu LINER · STEEL SHELL",
-                     aA * ann_win(t, 3.1, 4.9), "left", 70)
-            lc = net.channels["lox"][len(net.channels["lox"]) // 2]["c"]
-            annotate(d, view, size, org, lc[0], lc[1], "LOX CHANNELS IN THE SPIKE SKIN",
-                     aA * ann_win(t, 5.2, 7.6), "right", 80, color=(150, 205, 255))
-            annotate(d, view, size, org, G.X_SPIKE_END - 0.6, net.bore_r * 0.5, "LOX FEED · SPIKE CORE",
-                     aA * ann_win(t, 6.9, 8.6), "up", 90, color=(150, 205, 255))
+            annotate(d, view, size, org, 0.6, G.CH_R1, "RING CHAMBER",
+                     aA * ann_win(t, 0.3, 3.0), "up", 60)
+            annotate(d, view, size, org, G.CH_X0 + 0.04, G.CH_R0 + 0.12, "INJECTOR · CH4 + O2",
+                     aA * ann_win(t, 0.3, 3.0), "down", 70)
+            _, _, cl = G.passage_walls(60)
+            pm = cl[30]
+            annotate(d, view, size, org, pm[0], pm[1], "HOT GAS · ANNULAR PASSAGE",
+                     aA * ann_win(t, 0.3, 3.0), "right", 80, color=CL.HOTGAS)
+            aE, bE = net.band["ch4"]
+            mE = 0.5 * (aE[len(aE) * 2 // 3] + bE[len(bE) * 2 // 3])
+            annotate(d, view, size, org, mE[0], mE[1], "CH4 CHANNELS · OUTER SHELL",
+                     aA * ann_win(t, 3.1, 5.6), "up", 70, color=CL.COOL["ch4"][1])
+            annotate(d, view, size, org, net.m_ch4_in[0], net.m_ch4_in[1], "CH4 IN AT THE LIP",
+                     aA * ann_win(t, 3.6, 6.4), "right", 70, color=CL.COOL["ch4"][1])
+            aL, bL = net.band["lox"]
+            mL = 0.5 * (aL[len(aL) // 5] + bL[len(bL) // 5])
+            annotate(d, view, size, org, mL[0], mL[1], "O2 CHANNELS · CENTRAL BODY",
+                     aA * ann_win(t, 5.4, 8.4), "up", 90, color=CL.COOL["lox"][1])
+            annotate(d, view, size, org, 2.6, 0.0, "O2 IN ALONG THE AXIS",
+                     aA * ann_win(t, 6.6, 8.6), "down", 70, color=CL.COOL["lox"][1])
+            annotate(d, view, size, org, G.X_SPIKE_END - 0.1, 0.0, "O2 TURNS AT THE TIP",
+                     aA * ann_win(t, 6.9, 8.6), "up", 110, color=CL.COOL["lox"][1])
 
     # ---------------- part B overlays
     if aB > 0:
@@ -653,12 +693,12 @@ def make_frame(run, foot, n):
         ms = tn * run.t_unit * 1e3
         spaced(d, (980, py + 24), f"T+ {ms:.2f} ms · {fmt(slower(t, run))}× SLOWER", F_LABEL,
                alpha_blend(LAV, aB), 1.6, "r", stroke=4)
-        annotate(d, view, size, org, FB_B[0], -FB_B[1], "FREE BOUNDARY",
-                 aB * smooth_step(t, 14.0, 14.3), "down", 40)
-        annotate(d, view, size, org, WV_B[0], -WV_B[1], "WAVES",
-                 aB * smooth_step(t, 15.0, 15.3), "left", 105)
-        annotate(d, view, size, org, PC_B[0], PC_B[1], "PLUME CLOSES",
-                 aB * smooth_step(t, 17.0, 17.3), "up", 70)
+        annotate(d, view, size, org, FB_B[0], FB_B[1], "FREE BOUNDARY · HELD BY AIR PRESSURE",
+                 aB * smooth_step(t, 14.0, 14.3), "up", 50)
+        annotate(d, view, size, org, WV_B[0], -WV_B[1], "FLOW HUGS THE CENTRAL BODY",
+                 aB * smooth_step(t, 15.0, 15.3), "down", 110)
+        annotate(d, view, size, org, PC_B[0], PC_B[1], "AXIAL JET",
+                 aB * smooth_step(t, fv(0.73), fv(0.73) + 0.3), "up", 70)
         cap = typed(CAPS_B, t)
         ca = aB * (1 - smooth_step(t, *CAP_FADE_B)) if t < CAPS_B[-1][0] else aB
         if cap and ca > 0:
@@ -672,6 +712,10 @@ def make_frame(run, foot, n):
     if aF > 0:
         spaced(d, (100, fy + 22), "REAL · LEAP 71 20 kN METHALOX AEROSPIKE", F_LABEL, alpha_blend((236, 232, 244), aF), 2.0, stroke=3)
         spaced(d, (980, fy + 22), "2× SLOWER", F_LABEL, alpha_blend((236, 232, 244), aF), 2.0, "r", stroke=3)
+        an = aF * smooth_step(t, fv(1.6), fv(1.6) + 0.4)
+        if an > 0:
+            spaced(d, (100, fy + 54), "GREEN GLOW: COPPER BURNING (LEAP 71) · NOT NOMINAL COOLING", F_SMALL,
+                   alpha_blend((150, 240, 190), an), 1.5, stroke=3)
         cy = fy + SIZE_FOOT[1] + 18
         for i, line in enumerate(CREDITS):
             spaced(d, (980, cy + i * 21), line, F_TINY, alpha_blend((96, 93, 114), aF), 1.3, "r")
@@ -695,6 +739,11 @@ def main():
     run_dir, footage, out = sys.argv[1:4]
     run = Run(run_dir)
     PC_B = find_closure(run)
+    global THERMAL
+    print("conduction (cached after the first run) ...", flush=True)
+    THERMAL = CL.thermal_fields(run, verbose=True)
+    print(f"metal: full-pressure range {np.nanmin(THERMAL['T_hot']):.0f}-{np.nanmax(THERMAL['T_hot']):.0f} K, "
+          f"heat load {THERMAL['Q_hot'] / 1e3:.0f} kW", flush=True)
     total_ms = SIM_MAP[-3][1] * run.t_unit * 1e3
     CAPS_B[-1] = (20.0, f"The whole simulation is {total_ms:.1f} ms, quicker than a blink.")
     print(f"L0 = {run.L0:.4f} m, time unit = {run.t_unit * 1e3:.4f} ms, shown sim {total_ms:.2f} ms, "

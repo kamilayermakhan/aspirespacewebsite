@@ -1,141 +1,181 @@
-"""Aerospike half-section modelled on LEAP 71's hot-fired 20 kN methalox engine.
+"""Aerospike half-section after the corrected scheme ("Gas flow and cooling", LEAP 71 20 kN
+methalox), sized to the hot-fired engine.
 
-Lengths are in simulation units L0 = spike root radius (about 3.5 cm on the real
-engine, see L0_M).  x = engine axis (flow goes +x), r = radius.  The same polygon
-drives the solver mask (setup_case.py) and the outline in the video (make_video.py).
+x = engine axis (flow goes +x), r = radius, units of L0 (3.54 cm, L0_M). The polygon below
+is the metal; the gas cavity (ring chamber + annular passage) is a slit in it. The same
+polygon drives the solver mask (setup_case.py) and the drawing (make_video.py).
 
-What is taken from LEAP 71's photo of its three Noyron aerospikes (the 20 kN engine
-in the middle) and from the hot-fire footage, in units of the spike root radius:
-  * an urn-shaped body bulging to ~4.1, with a rounded corner into an almost flat
-    bottom; the body is ~0.29 m across next to the 1 m tall XRA-2E5, which sets L0
-  * a short, stubby, slightly concave spike: ~20 deg at the root, 1.73 long,
-    truncated at r ~0.55
-  * the flame leaves the engine as a large bright ring at the bottom corner
+How it works, as in the scheme:
+  * ring (toroidal) combustion chamber at the head end; the injector is its head face,
+    where methane and oxygen enter
+  * the hot gas leaves the chamber as an annular stream through a converging passage
+    between the outer shell and the central body, and exits at the lip
+  * outside, the annular flow wraps the long, slender central body and converges into an
+    axial jet past its tip
+  * cooling channels are inside the walls, the hot gas is outside them: methane in the
+    outer shell, oxygen in the central body (cooling.py)
 
-What is assumed (the inside is not visible):
-  * the annular throat sits at the bottom corner (r ~2.4) and points the flow
-    70 deg inward; the almost flat bottom is the steep first part of the spike,
-    a fillet turns it into the slender visible spike
-  * the toroidal chamber sits in the bulge of the body and feeds the throat
-    through a short converging slot
-  * the regenerative cooling network is in cooling.py
-With 50 bar this throat (A_t ~2.3 L0^2) gives ~20 kN at the real size, so the size,
-the chamber pressure and the rated thrust agree.
+Sizes: body 0.29 m across (LEAP 71's photo, next to the 1 m XRA-2E5); chamber, passage
+and central body in the proportions of the scheme; the throat is sized so that 50 bar
+gives about 20 kN (A_t ~2.4 L0^2). The scheme turns the flow ~40 deg inward at the lip;
+here it is 62 deg, because with Pc/pa ~46 the external expansion at the lip turns the
+outer boundary ~63 deg outward, and only a steep throat keeps it heading inward at sea
+level, as on the stand (see README).
 """
 import numpy as np
 
-L0_M = 0.0354          # metres per unit (body 0.29 m across / 2 / 4.1)
+L0_M = 0.0354
 
-# ------------------------------------------------------------ body (urn shape)
-X_LIP = 3.60           # plane of the cowl lip (bottom corner)
-R_MAX = 4.10           # bulge just above the bottom corner
-R_TOP = 3.30           # narrower towards the injector head (off-screen)
-R_CORNER = 2.56        # where the rounded corner meets the lip
-X_BULGE = X_LIP - 1.90
-X_BACK = -9.0          # body continues upstream out of the domain
-X_TAPER = -2.0         # the body tapers from R_TOP here to R_MAX at the bulge
+# ------------------------------------------------------------------ outer shell
+X_HEAD = -1.20         # flat head face
+R_MAX = 4.10
+R_HEAD_CORNER = 0.30
+X_SH = 1.77            # shoulder starts (end of the flat top)
+X_LIP = 3.57           # lip (end of the outer shell)
+R_LIP_OUT = 2.62       # outer edge of the lip face
+R_LIP = 2.25           # inner edge of the lip = outer wall of the throat (about half the body radius)
 
-# ------------------------------------------------------------ annular throat
-R_LIP = 2.42           # cowl lip = outer edge of the throat
-THETA = np.radians(70.0)                         # flow direction, inward from the axis
-D = np.array([np.cos(THETA), -np.sin(THETA)])   # along the slot
-N = np.array([np.sin(THETA), np.cos(THETA)])    # across the slot (inner -> lip)
-W_THR = 0.075          # half-width of the throat (gap 0.15)
-L_P = 0.70             # slot length from the chamber to the throat
-W_P1 = 0.14            # half-width where the slot leaves the chamber
-E = np.array([X_LIP, R_LIP]) - W_THR * N         # throat centre
-X_T, R_T = E - W_THR * N                         # throat inner point
+# ------------------------------------------------------------------ ring chamber
+CH_X0, CH_X1 = -0.35, 1.45     # injector face .. start of the passage
+CH_R0, CH_R1 = 2.55, 3.45      # inner .. outer wall
+CH_RC = 0.22                   # corner radius at the injector end
+INJ_DEPTH = 0.15               # reservoir cells next to the injector face
 
-# ------------------------------------------------------------ spike
-# steep "bottom" (part of the spike contour), fillet, then the measured profile
-BOTTOM_ANGLE = np.radians(80.0)
-R_FILLET = 0.30
-_S = np.array([0.0, 0.27, 0.53, 0.80, 1.07, 1.33, 1.60, 1.73])
-_R = np.array([1.00, 0.90, 0.81, 0.74, 0.675, 0.615, 0.565, 0.55])
+# ------------------------------------------------------------------ annular passage and throat
+GAM = 1.2
+A_T_TARGET = 2.35              # throat area for ~20 kN at ~46 bar (L0^2)
 
 
-def _spike_contour():
-    th1, th2 = BOTTOM_ANGLE, np.radians(20.0)
-    drop_arc = R_FILLET * (np.cos(th2) - np.cos(th1))
-    run_arc = R_FILLET * (np.sin(th1) - np.sin(th2))
-    r_b = 1.0 + drop_arc                                  # start of the fillet
-    x_b = X_T + (R_T - r_b) / np.tan(th1)
-    seg = np.stack([np.linspace(X_T, x_b, 30), np.linspace(R_T, r_b, 30)], 1)
-    # arc parametrised by the local wall angle th (from the axis), th1 -> th2
-    th = np.linspace(th1, th2, 40)
-    arc_x = x_b + R_FILLET * (np.sin(th1) - np.sin(th))
-    arc_r = r_b - R_FILLET * (np.cos(th) - np.cos(th1))
-    x_c, r_c = arc_x[-1], arc_r[-1]
-    prof = np.stack([x_c + _S, 1.0 * _R], 1)
-    pts = np.concatenate([seg, np.stack([arc_x, arc_r], 1)[1:], prof[1:]])
-    xf = np.linspace(pts[0, 0], pts[-1, 0], 800)
-    rf = np.interp(xf, pts[:, 0], pts[:, 1])
-    return xf, rf, (x_c, r_c)
+def area_ratio(M, g=GAM):
+    return (1 / M) * ((2 / (g + 1)) * (1 + (g - 1) / 2 * M * M)) ** ((g + 1) / (2 * (g - 1)))
 
 
-SPIKE_X, SPIKE_R, ROOT = _spike_contour()
+def prandtl_meyer(M, g=GAM):
+    a = np.sqrt((g + 1) / (g - 1)); b = np.sqrt(np.maximum(M * M - 1, 0))
+    return a * np.arctan(b / a) - np.arctan(b)
+
+
+def mach_from_area(eps):
+    lo, hi = 1.0, 20.0
+    for _ in range(200):
+        m = 0.5 * (lo + hi)
+        if area_ratio(m) < eps: lo = m
+        else: hi = m
+    return 0.5 * (lo + hi)
+
+
+EPS_E = np.pi * R_LIP ** 2 / A_T_TARGET    # ~6.8: full expansion to 1 atm at ~46 bar
+M_E = mach_from_area(EPS_E)                # ~3.0
+NU_E = prandtl_meyer(M_E)                  # ~64 deg
+THETA = NU_E                               # ideal aerospike: throat turned by nu_e
+D = np.array([np.cos(THETA), -np.sin(THETA)])
+N = np.array([np.sin(THETA), np.cos(THETA)])
+_rt2 = R_LIP ** 2 * (1 - np.cos(NU_E) / EPS_E)          # Angelino throat inner point
+W_THR = 0.5 * np.hypot(R_LIP - np.sqrt(_rt2), (R_LIP - np.sqrt(_rt2)) / np.tan(np.pi / 2 - THETA))
+E = np.array([X_LIP, R_LIP]) - W_THR * N        # throat centre
+X_T, R_T = E - W_THR * N                        # throat inner point
+_C0 = np.array([CH_X1, 0.5 * (CH_R0 + CH_R1)])
+_W0 = 0.5 * (CH_R1 - CH_R0)
+
+
+def _bez(u):
+    L = np.linalg.norm(E - _C0)
+    b0, b3 = _C0, E
+    b1 = _C0 + np.array([0.48 * L, 0.0])
+    b2 = E - D * 0.42 * L
+    u = np.asarray(u, float)[..., None]
+    return (1 - u) ** 3 * b0 + 3 * (1 - u) ** 2 * u * b1 + 3 * (1 - u) * u ** 2 * b2 + u ** 3 * b3
+
+
+def _bez_t(u):
+    du = 1e-4
+    t = (_bez(np.minimum(u + du, 1)) - _bez(np.maximum(u - du, 0)))
+    return t / np.linalg.norm(t, axis=-1, keepdims=True)
+
+
+def halfw(u):
+    u = np.asarray(u, float)
+    sm = u * u * (3 - 2 * u)
+    return W_THR + (_W0 - W_THR) * (1 - sm)
+
+
+def _wall_curve(p0, p3, n, k1=0.45, k2=0.40):
+    L = np.linalg.norm(p3 - p0)
+    b1 = p0 + np.array([k1 * L, 0.0]); b2 = p3 - D * k2 * L
+    u = np.linspace(0, 1, n)[:, None]
+    return (1 - u) ** 3 * p0 + 3 * (1 - u) ** 2 * u * b1 + 3 * (1 - u) * u ** 2 * b2 + u ** 3 * p3
+
+
+def passage_walls(n=120):
+    """Outer and inner walls of the annular passage (chamber end -> throat) and their mid-line.
+    Both leave the chamber level and arrive at the throat along the throat direction."""
+    outer = _wall_curve(np.array([CH_X1, CH_R1]), np.array([X_LIP, R_LIP]), n)
+    inner = _wall_curve(np.array([CH_X1, CH_R0]), np.array([X_T, R_T]), n, 0.55, 0.18)
+    return outer, inner, 0.5 * (outer + inner)
+
+
+# ------------------------------------------------------------------ central body (outside part)
+R_TRUNC = 0.25         # the slender central body is truncated here
+
+
+def _central_body():
+    """Ideal (Angelino) plug for full expansion at the lip's design Mach, truncated:
+    every Mach line from the lip carries the isentropic area, so the annular flow expands
+    along the central body and converges towards the axis."""
+    Ms = np.linspace(1.0, M_E, 4000)
+    a = NU_E - prandtl_meyer(Ms) + np.arcsin(1 / Ms)
+    r = R_LIP * np.sqrt(np.clip(1 - area_ratio(Ms) * Ms * np.sin(a) / EPS_E, 0, None))
+    x = X_LIP + (R_LIP - r) / np.tan(a)
+    keep = r >= R_TRUNC
+    x, r = x[keep], r[keep]
+    xf = np.linspace(x[0], x[-1], 900)
+    rf = np.interp(xf, x, r)
+    return xf, rf
+
+
+SPIKE_X, SPIKE_R = _central_body()
 X_SPIKE_END = SPIKE_X[-1]
 R_BASE = SPIKE_R[-1]
-
-# ------------------------------------------------------------ toroidal chamber
-CH_X, CH_R, CH_AX, CH_AR = X_LIP - 0.62, 3.05, 0.36, 0.30
-WALL = 0.12
-X_INJ = CH_X - CH_AX + 0.14
-_P1 = E - L_P * D
-
 A_THROAT = 2 * np.pi * E[1] * 2 * W_THR
-EPS_E = np.pi * R_LIP ** 2 / A_THROAT
+X_BACK = X_HEAD
 
 
 def r_spike(x):
     return np.interp(x, SPIKE_X, SPIKE_R, left=R_T, right=R_BASE)
 
 
-def _pt(s, q):
-    return E + s * D + q * N
-
-
-def _halfw(s):
-    u = np.clip(-np.asarray(s, dtype=float) / L_P, 0, 1)
-    return W_THR + (W_P1 - W_THR) * u ** 1.4
-
-
-def _ellipse(a0, a1, n, grow=0.0):
-    a = np.linspace(a0, a1, n)
-    return np.stack([CH_X + (CH_AX + grow) * np.cos(a), CH_R + (CH_AR + grow) * np.sin(a)], 1)
-
-
-def _ang(p):
-    return np.arctan2((p[1] - CH_R) / CH_AR, (p[0] - CH_X) / CH_AX)
-
-
-def r_body(x):
-    """Outer radius of the body upstream of the bottom corner."""
-    x = np.asarray(x, dtype=float)
-    t = np.clip((X_BULGE - x) / (X_BULGE - X_TAPER), 0, 1)
-    return R_MAX - (R_MAX - R_TOP) * t ** 1.6
-
-
-def corner(n=40):
-    ax, ar = X_LIP - X_BULGE, R_MAX - R_CORNER
+def shoulder(n=60):
     a = np.linspace(np.pi / 2, 0, n)
-    return np.stack([X_BULGE + ax * np.cos(a), R_CORNER + ar * np.sin(a)], 1)
+    return np.stack([X_SH + (X_LIP - X_SH) * np.cos(a), R_LIP_OUT + (R_MAX - R_LIP_OUT) * np.sin(a)], 1)
+
+
+def outer_surface():
+    """Outer surface of the shell: head face corner, flat top, shoulder down to the lip."""
+    a = np.linspace(np.pi, np.pi / 2, 16)
+    corner = np.stack([X_HEAD + R_HEAD_CORNER + R_HEAD_CORNER * np.cos(a),
+                       R_MAX - R_HEAD_CORNER + R_HEAD_CORNER * np.sin(a)], 1)
+    top = np.stack([np.linspace(X_HEAD + R_HEAD_CORNER, X_SH, 30), np.full(30, R_MAX)], 1)
+    return np.concatenate([[[X_HEAD, 0.0], [X_HEAD, R_MAX - R_HEAD_CORNER]], corner[1:], top[1:], shoulder()[1:]])
+
+
+def chamber_head():
+    """Injector end of the ring chamber (rounded corners), outer wall -> inner wall."""
+    a1 = np.linspace(np.pi / 2, np.pi, 12)
+    top = np.stack([CH_X0 + CH_RC + CH_RC * np.cos(a1), CH_R1 - CH_RC + CH_RC * np.sin(a1)], 1)
+    a2 = np.linspace(np.pi, 1.5 * np.pi, 12)
+    bot = np.stack([CH_X0 + CH_RC + CH_RC * np.cos(a2), CH_R0 + CH_RC + CH_RC * np.sin(a2)], 1)
+    return np.concatenate([[[CH_X1, CH_R1]], top, bot, [[CH_X1, CH_R0]]])
 
 
 def outline():
-    """Closed polygon (x, r) of the metal half-section, chamber as a slit."""
-    pts = [[X_BACK, 0.0]]
-    xs = np.linspace(X_BACK, X_BULGE, 40)
-    pts += np.stack([xs, r_body(xs)], 1).tolist()
-    pts += corner()[1:].tolist()                               # rounded corner to the lip
-    pts.append([X_LIP, R_LIP + 0.004])
-    pts += [_pt(s, _halfw(s)).tolist() for s in np.linspace(0, -L_P, 40)]
-    p_out = _pt(-L_P, _halfw(-L_P)); p_in = _pt(-L_P, -_halfw(-L_P))
-    a0, a1 = _ang(p_out), _ang(p_in)
-    if a1 < a0: a1 += 2 * np.pi
-    pts += _ellipse(a0, a1, 90)[1:-1].tolist()
-    pts += [_pt(s, -_halfw(s)).tolist() for s in np.linspace(-L_P, 0, 40)]
-    pts += np.stack([SPIKE_X, SPIKE_R], 1)[1::4].tolist()
+    """Closed polygon (x, r) of the metal half-section; the gas cavity is a slit in it."""
+    outer_w, inner_w, _ = passage_walls()
+    pts = outer_surface().tolist()
+    pts.append([X_LIP, R_LIP + 0.002])
+    pts += outer_w[::-1].tolist()                  # passage outer wall: throat -> chamber
+    pts += chamber_head().tolist()                 # chamber outer wall, injector face, inner wall
+    pts += inner_w.tolist()                        # passage inner wall: chamber -> throat
+    pts += np.stack([SPIKE_X, SPIKE_R], 1)[1::3].tolist()
     pts += [[X_SPIKE_END, R_BASE], [X_SPIKE_END, 0.0]]
     return np.array(pts)
 
@@ -159,25 +199,26 @@ def in_polygon(x, r, poly=OUTLINE):
     return inside.reshape(shp)
 
 
-def in_chamber(x, r):
-    return ((x - CH_X) / CH_AX) ** 2 + ((r - CH_R) / CH_AR) ** 2 <= 1.0
-
-
 def solid(x, r):
     return in_polygon(x, r)
 
 
+def in_chamber(x, r):
+    x = np.asarray(x, float); r = np.asarray(r, float)
+    return (x >= CH_X0) & (x <= CH_X1) & (r >= CH_R0) & (r <= CH_R1) & ~solid(x, r)
+
+
 def reservoir(x, r):
-    return in_chamber(x, r) & (x < X_INJ)
+    return in_chamber(x, r) & (np.asarray(x) < CH_X0 + INJ_DEPTH)
 
 
 def chamber_probe(x, r):
-    return in_chamber(x, r) & (x >= X_INJ + 0.08)
+    return in_chamber(x, r) & (np.asarray(x) >= CH_X0 + INJ_DEPTH + 0.10)
 
 
 if __name__ == "__main__":
-    print(f"throat inner ({X_T:.3f},{R_T:.3f}), root {ROOT[0]:.3f},{ROOT[1]:.3f}; spike end x={X_SPIKE_END:.3f} "
-          f"r_base={R_BASE:.3f}; A_t={A_THROAT:.3f} ({A_THROAT * L0_M**2 * 1e4:.1f} cm^2), eps={EPS_E:.2f}; "
-          f"P1 in chamber: {in_chamber(*_P1)}; body dia {2 * R_MAX * L0_M:.3f} m")
-    F_est = 1.5 * 50e5 * A_THROAT * L0_M ** 2
-    print(f"thrust estimate at 50 bar (C_F ~1.5): {F_est / 1e3:.1f} kN")
+    print(f"throat centre ({E[0]:.3f},{E[1]:.3f}), inner ({X_T:.3f},{R_T:.3f}); tip x={X_SPIKE_END:.2f} "
+          f"r={R_BASE:.2f}; A_t={A_THROAT:.3f} ({A_THROAT * L0_M ** 2 * 1e4:.1f} cm^2); body dia {2 * R_MAX * L0_M:.3f} m; "
+          f"length head->tip {(X_SPIKE_END - X_HEAD) * L0_M:.3f} m")
+    F_est = 1.5 * 46e5 * A_THROAT * L0_M ** 2
+    print(f"thrust estimate at 46 bar (C_F ~1.5): {F_est / 1e3:.1f} kN")

@@ -1,158 +1,123 @@
 # How an aerospike starts: explainer video
 
 A 9:16 explainer (1080×1920, 30 fps, 23.8 s) on how LEAP 71's 20 kN methalox
-Noyron aerospike starts and how it is cooled. It shares the timing and transitions of
-the "How a Raptor engine starts" reference. The whole clip is one continuous take, and
-the simulation never restarts.
-
-| Time | What happens |
-|---|---|
-| 0–4.6 s | Close-up of the toroidal chamber, the injector face, the manifolds and the methane channels in the cowl. Chamber filling. Captions at 0.25 s (combustion) and 3.1 s (methane path) |
-| 4.6–7.0 s | The camera glides down the spike along the LOX channels in its skin, to the tip plenum and the axial LOX feed |
-| 7.0–8.6 s | Caption at 7.0 s (LOX path); the camera pulls back to the whole engine |
-| 8.6–9.25 s | Title and stats fade out, the sim panel slides up, and the footage fades in |
-| 9.55–10.25 s | Footage: cold propellant flow. Sim: the throat is about to choke |
-| 10.25 s | Ignition fireball in the footage; the sim panel flashes, as in the reference |
-| 10.58 s | The first green streaks leave the ring in the footage, and the sim jet leaves the slot. It grows on the weak first stage |
-| 11.15 s | The real flame becomes one full column, and the model's second stage brings the chamber to full pressure |
-| 10.5–22.3 s | Captions start at 10.5, 12.25, 13.75, 16.5 (+17.0) and 20.0 s. Annotations appear and stay: free boundary, waves, plume closes. A legend shows the computed coolant outlet temperatures and peak copper-wall temperature |
-| 22.3–23.8 s | Fast rewind of the sim and push-in back to the first frame, so the clip loops |
+aerospike works and how it is cooled. It shares the timing and transitions of the
+"How a Raptor engine starts" reference: one continuous take in which the simulation never
+restarts.
 
 Output: `out/aerospike-explainer.mp4`
 
-## What is known, what is assumed
+## How it works (the corrected scheme)
 
-**Footage.** LEAP 71's hot fire of the 20 kN methalox aerospike at Airborne Engineering:
-6.8 s at 60 fps, played 2× slower, no sound. It is straightened the way the reference is.
-* **Rotation.** The flame's bright core runs 26° below horizontal in the source. After
-  rotating by 26°, its upper and lower edges are symmetric (−2.0° and +2.5°).
-* **Crop.** The axis sits at the vertical centre and the engine exit at 25 % of the width.
+1. **Ring chamber.** The combustion chamber is a ring at the head end. Its head face is
+   the injector, where methane and oxygen enter.
+2. **Annular flow.** The hot gas leaves the chamber as an annular stream. It runs
+   through a converging passage between the outer shell and the central body and exits
+   at the lip.
+3. **Axial jet.** Outside, the annular flow wraps the long, slender central body and
+   converges into an axial jet past its tip.
+4. **Methane.** It cools the outer shell. It enters at the lip and runs back through
+   channels inside the shell (throat, passage, outer chamber wall) to the injector.
+5. **Oxygen.** It cools the central body. It enters along the axis, runs inside the
+   central body to its tip, turns, and comes back through channels under the body's hot
+   surface to the injector.
+6. **Channels inside the walls, hot gas outside them.** The routing and size of the
+   channels are notional.
+7. **The green colour** of the test flame is copper burning, per LEAP 71. It does not
+   indicate nominal cooling.
 
-**Flame course** (source time, measured frame by frame):
-* 0–0.33 s: cold propellant flow.
-* 0.35–0.50 s: ignition fireball.
-* 0.517 s: first thin green streaks from the ring, converging along the spike.
-* 0.52–0.78 s: a growing, flickering green jet with an afterburning cloud beyond it.
-* From 0.80 s: one bright full column.
+Flame phases (time from the start of the hot-fire clip):
 
-**From LEAP 71 (leap71.com, photos, footage):**
-* The engine is a 20 kN methalox aerospike. It reached full chamber pressure, 50 bar, on
-  a single burn; the site cites startup-transient issues. It was 3D-printed in CuCrZr.
-* It is the middle engine in LEAP 71's photo of its three Noyron aerospikes, and the
-  engine in the footage.
-* **Regenerative cooling.** The outer chamber is cooled by cryogenic methane and the
-  spike by liquid oxygen. LEAP 71 states this for the XRA-2E5, and the same split, with
-  kerosene instead of methane, for the 5 kN engine. The video uses it for the 20 kN engine.
-* **What the cutaways show.** LEAP 71's dual-metal aerospike test part, printed by
-  Fraunhofer IGCV, shows the kind of structure involved:
-  * a copper liner on every hot wall and inside every channel, steel outside;
-  * rows of small helical channels;
-  * ribbed toroidal manifolds and branching feeds;
-  * an injector face with many elements;
-  * an axial feed down the spike;
-  * lightening windows between ribs.
+| Footage time | Phase |
+|---|---|
+| ~0.2 s | Initial gas release; the flame has not formed yet |
+| ~0.7–1.2 s | The axial jet forms; the annular flow wraps the central body |
+| from ~1.7 s | Developed test flame; green glow from copper |
 
-**Size and shape (units of spike root radius, L0 ≈ 3.5 cm):**
-* The body is about 0.29 m across, measured against the 1 m tall XRA-2E5 in the same photo.
-* An urn-shaped body, about 3.3 at the head with a bulge of about 4.1, then a rounded
-  corner into an almost flat bottom.
-* A short, stubby, slightly concave spike: about 20° at the root, 1.73 long, truncated
-  at r ≈ 0.55.
+## Timeline of the video
 
-**Assumed, because the inside is not visible:**
-* **Throat.** The annular throat sits at the bottom corner (r ≈ 2.4) and points the flow
-  70° inward. The almost flat bottom is the steep first part of the spike contour.
-* **Chamber.** The toroidal chamber sits in the bulge of the body and feeds the throat
-  through a short converging slot.
-* **Consistency check.** A_t ≈ 28 cm² and ε ≈ 8. At the real size and about 46 bar the
-  model produces about 19 kN, so thrust is computed, not scaled.
-* **Why 70° inward.** After the external expansion to 1 atm, the outer jet boundary
-  still heads inward, so sea-level air presses the plume onto the spike.
-* **Cooling network** (`cooling.py`), in the style of LEAP 71's parts. Both circuits run
-  counterflow.
-  * **CH4.** In at a small manifold in the cowl, just upstream of the lip. Through 25
-    channels in the cowl and the outer chamber wall; the cowl channels are shallower
-    where the cowl is thin. Into a ribbed collector torus behind the injector, then five
-    branches to the CH4 injector manifold.
-  * **LOX.** Down an axial bore to a plenum in the truncated spike tip. Back through 86
-    channels in the base, the spike skin, the inner slot wall and the chamber floor.
-    Into a collector torus, then five branches to the LOX injector manifold.
-  * **Injector.** Ten elements on the injector face, alternating CH4 and LOX.
-* **Start-up.** Two stages, about 20 bar then full pressure, mapped onto the flame course
-  above.
+| Time | What happens |
+|---|---|
+| 0–8.6 s | Close-up of the ring chamber and the injector face. The camera then follows the hot gas down the annular passage and along the central body to its tip, and pulls back. Captions at 0.25 s (combustion), 3.1 s (methane) and 7.0 s (oxygen) |
+| 8.6–9.25 s | Title and stats fade out, the sim panel slides up, and the footage fades in |
+| 10.25 s | Ignition fireball in the footage; the sim panel flashes |
+| 10.0 / 11.0 / 13.0 s | Phase captions, at footage times 0.23, 0.73 and 1.73 s |
+| 16.5 s | "Channels inside the walls, hot gas outside them." |
+| 22.3–23.8 s | Fast rewind and push-in back to the first frame, so the clip loops |
+
+## Engine (`geometry.py`, units of L0 = 3.54 cm)
+
+* **Size.** The body is 0.29 m across, measured on LEAP 71's photo next to the 1 m
+  XRA-2E5. The other proportions follow the scheme.
+* **Chamber.** A ring at the head end, x = −0.35…1.45, r = 2.55…3.45.
+* **Throat.** It sits at the lip, r ≈ 2.2. Its area of 2.35 L0² (29 cm²) gives about
+  20 kN at 46–50 bar.
+* **Central body: an ideal (Angelino) aerospike contour.**
+  * The lip radius is ~0.55 of the body radius, so the area ratio is ε = 6.8. That is
+    full expansion to 1 atm at ~46 bar (M_e = 3.0).
+  * The throat is turned ν(M_e) = 64° inward.
+  * Every Mach line from the lip carries the isentropic area, so the annular flow
+    expands along the central body and converges towards the axis.
+  * The contour is truncated where it is r = 0.25 thin, 4.7 L0 behind the lip.
+  * The scheme draws the flow ~40° inward at the lip. With only 40°, the external
+    expansion at the lip would turn the outer jet boundary outward, like a spray. The
+    ideal contour is what makes the flow wrap the central body, as the scheme shows.
 
 ## Model
 
-`euler.c` is a 2D axisymmetric compressible finite-volume solver:
+**Flow** (`euler.c`) is a 2D axisymmetric compressible solver:
+* MUSCL / HLLC / SSP-RK2 on 1167 × 600 cells (Δ = 0.015 L0, about 11 cells across the
+  throat).
+* The domain reaches r = 9 L0, more than twice the body radius, and 1.8 L0 ahead of the
+  head face. The jet can then entrain still air freely. A boundary close to the engine
+  confines the jet, and its exhaust then circulates back in a cloud around it.
+* Two gases: methalox exhaust (γ 1.2, 22 g/mol) and air (γ 1.4).
+* Afterburning of the fuel-rich exhaust in air.
+* Cooled walls with a wall function, St = 0.0025 at Tw = 800 K.
+* Smagorinsky eddy viscosity with Cs = 0.45, chosen, not validated.
+* The chamber is not combusting. An "injector" layer at its head face is forced to the
+  stagnation state (~3,500 K) in two stages, ~20 bar then full pressure. Ambient air is
+  1 atm, 300 K.
 
-* MUSCL (minmod) reconstruction with HLLC fluxes and SSP-RK2 time stepping, on a grid of
-  958 × 367 cells (Δ = 0.012 L0, about 12 cells across the throat).
-* **Two gases.** Methalox exhaust (γ 1.2, 22 g/mol, frozen) and air (γ 1.4, 29 g/mol),
-  mixed by the exhaust mass fraction.
-* **Afterburning.** A second scalar tracks unburned fuel-rich exhaust. It burns with
-  entrained air above 1,000 K, releasing about 1.2 MJ per kg of exhaust.
-* **Cooled walls.** The stair-step walls carry a wall function: gas-side heat loss
-  q = St ρ|V| cp (T − Tw) with St = 0.0025 and Tw = 800 K, plus skin friction from the
-  Reynolds analogy.
-* **Turbulence.** A Smagorinsky eddy viscosity acts in the shear layers. Its coefficient,
-  Cs = 0.45, was chosen so the base region empties and the plume can close behind the
-  tip; it is not validated.
-* **Chamber.** The chamber is not combusting. A thin "injector" region is forced to the
-  stagnation state (about 3,500 K), in two stages. Ambient air is 1 atm and 300 K.
+**Coolant** (`cooling.py`, every frame) uses a 1D energy balance along both circuits with
+the flow solution's wall heat flux:
+  T_coolant(s) = T_in + Q(s) / (ṁ cp)
+* ṁ = Pc·A_t/c* (c* = 1800 m/s, O/F = 3.3) at the nominal pressure.
+* CH4: in at 120 K, cp 3.6 kJ/kg/K.
+* O2: in at 95 K, cp 1.7 kJ/kg/K.
+* The channel coefficient is h = 60 kW/m²/K.
 
-**Coolant and wall temperatures** (`cooling.solve`, every frame). The model's wall heat
-flux is sampled along both hot-wall circuits and integrated in the flow direction:
-  dQ = q 2πr ds,  T_coolant = T_in + Q / (ṁ cp),  T_wall = T_coolant + q (1/h + t/k).
-* **Inputs.**
-  * ṁ from Pc·A_t/c* (c* = 1800 m/s, O/F = 3.3), at the nominal pressure, because the
-    supply sets the coolant flow, not the chamber.
-  * CH4: in at 120 K, cp 3.6 kJ/kg/K.
-  * LOX: in at 95 K, cp 1.7 kJ/kg/K.
-  * h = 60 kW/m²/K, and a 0.8 mm CuCrZr liner with k = 320 W/m/K.
-* **Results at full pressure.**
-  * About 0.45 MW goes into the methane: 120 → 194 K.
-  * About 0.40 MW goes into the oxygen: 95 → 137 K.
-  * The peak copper wall temperature is about 700 K, at the throat, where q ≈ 35 MW/m².
-* **What it is not.** It is a 1D balance, not conjugate heat transfer. Coolant properties
-  are constant: the real methane passes its pseudo-critical point, which this ignores.
-  The CFD wall temperature stays fixed at 800 K.
+**Metal** (`cooling.conduction`) uses steady 2D axisymmetric conduction:
+* CuCrZr (k = 320 W/m/K) on the hot walls and around the channels, steel
+  (k = 20 W/m/K) elsewhere.
+* Hot-gas side: q = h_g (T_gas − T_wall), with h_g and T_gas from the flow solution.
+* Coolant side: q = h_c (T_wall − T_coolant).
+* It is solved once at full pressure and once chilled down; frames are blended by the
+  current heat load.
 
-**Limits.** There is no injector or 3D flow, and no resolved boundary layer. The channel
-layout is a plausible one; the real 20 kN engine's is not public. The physical time scale
-is compressed: the model reaches full pressure within about 1 ms of model time, whereas a
-real start takes far longer. Playback is therefore matched to the footage.
+**Limits.**
+* No injector, 3D or boundary-layer resolution.
+* The coolant is a 1D balance with constant properties: methane's pseudo-critical
+  behaviour is ignored.
+* The real channel geometry of the 20 kN engine is not public.
+* The start-up time scale is compressed, so playback is matched to the footage.
 
-Playback speed:
-* **Before ignition.** The video shows chamber filling only (t = 0.22–0.70).
-* **At ignition.** The sim flash lands on the real fireball. The sim jet leaves the slot
-  with the first green streaks and grows on the first stage.
-* **At full column.** The model's second stage lands on the moment the real flame becomes
-  one full column.
-* **Established jet.** It then plays at about 1.4 model units per second.
+## Build
 
 ```
 gcc -O3 -march=native -fopenmp -o euler euler.c -lm
 python3 setup_case.py RUN_DIR            # params.txt + flags.u8 (geometry mask)
-./euler RUN_DIR                           # ~1 h on 4 cores, ~4.5 GB of float16 snapshots
+./euler RUN_DIR                           # ~1 h on 4 cores
 python3 make_video.py RUN_DIR hotfire.mov out/aerospike-explainer.mp4
 ```
 
-`make_video.py` renders the video:
-
-* **Brightness** follows the model: hot exhaust and afterburning mixture glow by
-  temperature and density. A faint schlieren layer shows waves in the air.
-* **Colour** is sampled from the footage on screen. The flame pixels are sorted by
-  brightness and mapped onto the model's intensity, and the palette is smoothed over time.
-* **The engine** is a steel body from `geometry.py`, with a printed-metal grain fixed to
-  the part.
-* **The cooling network** is drawn from `cooling.py`:
-  * the copper liner is coloured by the computed wall temperature;
-  * each channel's coolant is coloured by its computed temperature, with a pulse that
-    travels in the flow direction;
-  * the manifolds, branching feeds, injector elements, the LOX bore and tip plenum are
-    drawn as well, plus lightening windows between ribs in the upper body.
-* **The camera** can frame off-axis close-ups (view = x range, half-height, centre r).
-* **Type** is set in Jost (OFL, see `fonts/`).
-* **Audio** is synthetic, because the footage has no sound: a hiss of cold flow before
-  ignition, a crack at the fireball, then a roar that follows the model's chamber
-  pressure and thrust.
+`make_video.py`:
+* **Flame brightness** comes from the model's temperature and density. **Flame colour**
+  is sampled from the footage on screen.
+* **The metal** is coloured by its computed temperature.
+* **The coolant channels** are coloured by the computed coolant temperature, with flow
+  arrows: oxygen blue, methane violet.
+* **The footage** is the hot fire at Airborne Engineering (60 fps, played 2× slower).
+  It is rotated by its measured 26° flame axis and centred, as in the reference.
+* **Audio** is synthetic, because the footage has no sound.
+* **Type** is set in Jost.

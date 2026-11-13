@@ -7,7 +7,10 @@ import numpy as np
 import geometry as G
 
 P = dict(
-    DX=0.012, XMAX=11.5, RMAX=4.4,
+    DX=0.015, XMIN=-3.0, XMAX=14.5, RMAX=9.0,
+    # far field: room around the engine so the jet can entrain air freely (a boundary close
+    # to the engine confines the jet and traps its exhaust in a recirculating cloud)
+    RSNAP=5.2,       # snapshots keep r < RSNAP only (what the video shows)
     CFL=0.4,
     # gases: methalox exhaust (frozen, fuel-rich, M ~22 g/mol) and air (M 29); R is per unit of R_air
     GAM_E=1.2, R_E=29.0 / 22.0, GAM_A=1.4,
@@ -45,12 +48,13 @@ def main(d, dx=None):
     sr = s.copy(); sr[:, 1:] |= s[:, :-1]; sr[:, :-1] |= s[:, 1:]
     fl = (s * 1 + res * 2 + probe * 4 + sx * 8 + sr * 16).astype(np.uint8)
     fl.tofile(os.path.join(d, "flags.u8"))
+    nrs = min(nr, int(round(P["RSNAP"] / P["DX"])))
     with open(os.path.join(d, "params.txt"), "w") as f:
         # the solver works in x - XMIN
-        for k, v in dict(P, NX=nx, NR=nr, XSPIKE=G.X_SPIKE_END - xmin, XLIP=G.X_LIP - xmin).items():
+        for k, v in dict(P, NX=nx, NR=nr, NRS=nrs, XSPIKE=G.X_SPIKE_END - xmin, XLIP=G.X_LIP - xmin).items():
             f.write(f"{k} {v}\n")
-    np.savez(os.path.join(d, "grid.npz"), xc=xc, rc=rc, solid=s, **dict({k: v for k, v in P.items()}, XMIN=xmin))
-    print("grid", nx, nr, nx * nr)
+    np.savez(os.path.join(d, "grid.npz"), xc=xc, rc=rc[:nrs], solid=s[:, :nrs], NR_FULL=nr, **dict({k: v for k, v in P.items()}, XMIN=xmin))
+    print("grid", nx, nr, nx * nr, "snapshots keep", nrs, "rows")
 
 if __name__ == "__main__":
     main(sys.argv[1], float(sys.argv[2]) if len(sys.argv) > 2 else None)

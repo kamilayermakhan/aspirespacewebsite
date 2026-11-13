@@ -29,6 +29,7 @@ static unsigned char *NWALL;
 static double *rc, *rf, *NUT;
 #define EPS 1e-6
 #define ID(i, j) ((size_t)(i) * NR + (j))
+static int NRS;   /* snapshots keep only the rows j < NRS (the far field is not drawn) */
 #define SOLID(c) (FL[c] & 1)
 
 static inline void gas(double y, double *gam, double *R, double *cv) {
@@ -120,12 +121,16 @@ static void force_reservoir(double **U, double t) {
 }
 static inline void getW(int i, int j, double pa, double *w) {
     if (i < 0 || j >= NR) { w[0] = pa; w[1] = 0; w[2] = 0; w[3] = pa; w[4] = 0; w[5] = 0; return; }
-    if (i >= NX) i = NX - 1;
+    int outlet = 0;
+    if (i >= NX) { i = NX - 1; outlet = 1; }
     int mirror = 0;
     if (j < 0) { j = 0; mirror = 1; }
     size_t c = ID(i, j);
     for (int k = 0; k < NV; k++) w[k] = W[k][c];
     if (mirror) w[2] = -w[2];
+    /* outlet: no backflow. A zero-gradient outlet lets air flow back in along the axis and
+       feeds an artificial air core that keeps the annular jet from closing behind the tip. */
+    if (outlet && w[1] < 0) w[1] = 0;
 }
 
 static double rhs(double **U, double t, double **dU, int want_dt) {
@@ -277,11 +282,11 @@ static void diagnostics(double t, FILE *lg, int k) {
 static void read_params(const char *dir) {
     char fn[1024]; snprintf(fn, sizeof fn, "%s/params.txt", dir);
     FILE *f = fopen(fn, "r"); if (!f) { perror(fn); exit(1); }
-    char key[64]; double val; int NXd = 0, NRd = 0;
+    char key[64]; double val; int NXd = 0, NRd = 0, NRSd = 0;
     double dummy;
     while (fscanf(f, "%63s %lf", key, &val) == 2) {
 #define P(name, var) if (!strcmp(key, name)) var = val;
-        P("NX", NXd) P("NR", NRd) P("DX", DX) P("CFL", CFL) P("T_END", T_END) P("T_IGN", T_IGN)
+        P("NX", NXd) P("NR", NRd) P("NRS", NRSd) P("DX", DX) P("CFL", CFL) P("T_END", T_END) P("T_IGN", T_IGN)
         P("T_RAMP", T_RAMP) P("P1", P1) P("T_STAGE2", T_STAGE2) P("T_RAMP2", T_RAMP2) P("PC", PC) P("TC", TC)
         P("T_ALT0", T_ALT0) P("T_ALT1", T_ALT1) P("PA_HIGH", PA_HIGH) P("XSPIKE", XSPIKE) P("XLIP", XLIP)
         P("SNAP_DT1", SNAP_DT1) P("SNAP_DT2", SNAP_DT2) P("SNAP_SWITCH", SNAP_SWITCH)
@@ -289,7 +294,7 @@ static void read_params(const char *dir) {
         P("ST", ST) P("CF2", CF2) P("TW", TW) P("A_AB", A_AB) P("Q_AB", Q_AB) P("T_AB", T_AB)
         P("GAM", dummy)
     }
-    NX = NXd; NR = NRd;
+    NX = NXd; NR = NRd; NRS = (NRSd > 0 && NRSd < NR) ? NRSd : NR;
     fclose(f);
 }
 
@@ -334,7 +339,11 @@ int main(int argc, char **argv) {
             snprintf(fn, sizeof fn, "%s/s%05d.f16", dir, k);
             FILE *o = fopen(fn, "wb");
             int order[NV] = {0, 3, 4, 1, 2, 5};
-            for (int q = 0; q < NV; q++) { for (size_t c = 0; c < N; c++) buf[c] = (_Float16)W[order[q]][c]; fwrite(buf, 2, N, o); }
+            for (int q = 0; q < NV; q++) {
+                size_t m = 0;
+                for (int i = 0; i < NX; i++) for (int j = 0; j < NRS; j++) buf[m++] = (_Float16)W[order[q]][ID(i, j)];
+                fwrite(buf, 2, m, o);
+            }
             fclose(o);
             if (k % 25 == 0) { printf("t=%.4f steps=%ld snaps=%d wall=%.0fs\n", t, steps, k, omp_get_wtime() - wall0); fflush(stdout); }
             k++;
